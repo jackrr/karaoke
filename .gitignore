@@ -1,0 +1,23 @@
+# E2E test artifacts
+tmp/
+playwright-report/
+test-results/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Frontend
+dist/
+build/
+**/.svelte-kit/
+**/node_modules/
+
+
+# OS
+.DS_Store
+Thumbs.db
