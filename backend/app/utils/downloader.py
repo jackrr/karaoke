@@ -3,6 +3,12 @@ import os
 import subprocess
 import asyncio
 
+
+async def download_audio_from_yt(url: str, output_dir: str = "") -> str:
+    """Download audio from YouTube using YouTubeAudioDownloader."""
+    return await YouTubeAudioDownloader.download(url, output_dir or "/tmp")
+
+
 class YouTubeAudioDownloader:
     """Download audio from YouTube URLs using yt-dlp."""
     

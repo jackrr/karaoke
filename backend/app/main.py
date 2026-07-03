@@ -16,8 +16,17 @@ from app.tracking import StreamingClientManager
 
 # ── Logging ──────────────
 
-logging.basicConfig(level=logging.INFO)
+logging.getLogger("uvicorn").setLevel(logging.INFO)
+logging.getLogger("uvicorn.error").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter(
+        "%(levelname)s:%(name)s:%(message)s"
+    ))
+    logger.addHandler(_handler)
+logger.setLevel(logging.INFO)
 
 # ── Lifespan ─────────────
 

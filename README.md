@@ -1,26 +1,42 @@
 # Karaoke
 
-A simple webapp that turns an audio track into a karaoke song.
+A little web app for doing karaoke as a group.
 
-## Features
+## Features (WIP)
 
-- sessions -- can start a session with a unique join link
-- playback view with visuals and lyrics
-- enqueue menu to:
-  - specify a youtube url to pull a track from
-  - file upload a mp3 or wav file of a track
-  - pick a track from the linked jellyfin library
-  - reorder already-queued tracks
+- **Sessions** — Create a room or join an existing one via 6-digit passcode
+- **Queue management** — Enqueue, remove, reorder tracks
+- **Track sources** — Audio file upload, YouTube URL
+- **Real-time sync** — WebSocket broadcasts for queue, track, and client state
+- **Stem separation** — Upon enqueue, vocals are stemmed out then re-added at a configured reduction in volume
+- **Lyrics** — Upon enqueue, lrc format lyrics are fetched from lrclib.net. Lyrics are also downloaded in lrcformat for youtube files from captions. Lyrics are shown in sync with the played track.
+- **Track streaming** - The playback view streams the modified currently active track and lyrics from the server
 
-## How it works
+## Tech
 
-When a track is enqueued via the enqueue menu:
+- Frontend: Bun + Svelte
+- Backend: Python + FastAPI + sqlite
 
-1. (youtube url only) it is downloaded via ytdl (https://github.com/ytdl-org/youtube-dl)
-1. https://pypi.org/project/pyacoustid/ is used to identify the original track
-1. the file is stemmed w/ [demucs](https://github.com/adefossez/demucs) or [spleeter](https://github.com/deezer/spleeter), then joined with the vocal stem at 20% initial volume
-1. timed lyrics for the track are fetched with the ytdl (can be specified), but results from https://lrclib.net/ (fetched via acoustic id) are prioritized if available
-1. at playback time, the web-browser is sent the lyrics and starts streaming the audio file from the server
-1. if the lyrics are in the lrclib format, they are shown according to playback timing, otherwise the lyrics are displayed in full in a scrollable view
+## How to Run
 
-Websockets to keep all views up-to-date (queue updates, track transitions)
+### Backend
+
+```bash
+uv venv
+cd backend && uv sync
+uv run fastapi dev app/main.py
+```
+
+The API runs at **http://localhost:8000**. A SQLite database (`karaoke.db`) is created automatically when the app starts.
+
+Backend dependencies are managed via [uv](https://docs.astral.sh/uv/) in `backend/pyproject.toml`.
+
+### Frontend (Bun + Svelte)
+
+```bash
+cd frontend
+bun install
+bun run dev
+```
+
+The dev server runs at **http://localhost:5173**.
