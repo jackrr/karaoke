@@ -21,3 +21,7 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+.pi/
+.pi-subagents/
+worktrees/
