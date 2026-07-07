@@ -9,45 +9,55 @@ fi
 BRANCH="$1"
 PROMPT="$2"
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(git rev-parse --show-toplevel)"
 
-# Create the branch (from main or master)
-if git rev-parse --verify main &>/dev/null; then
-  BASE="main"
-elif git rev-parse --verify master &>/dev/null; then
-  BASE="master"
-else
-  echo "No main or master branch found. Aborting."
-  exit 1
+# Normalize branch name to directory name (e.g. jr/rule-iteration -> jr-rule-iteration)
+DIR_NAME="${BRANCH//\//-}"
+WORKTREE_DIR="$SRC_DIR/worktrees/$DIR_NAME"
+
+if [ -d "$WORKTREE_DIR" ]; then
+    echo "Error: $WORKTREE_DIR already exists. Remove it first or choose a different path."
+    exit 1
 fi
 
-git checkout -b "$BRANCH" "$BASE"
+echo "Creating worktree at $WORKTREE_DIR on branch '$BRANCH'..."
+if git -C "$SRC_DIR" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    git -C "$SRC_DIR" worktree add "$WORKTREE_DIR" "$BRANCH"
+else
+    echo "Branch '$BRANCH' does not exist, creating it..."
+    git -C "$SRC_DIR" worktree add -b "$BRANCH" "$WORKTREE_DIR"
+fi
 
-# Create worktree in a sibling directory
-WORKTREE_DIR="$REPO_DIR/worktrees/$BRANCH"
-git worktree add "$WORKTREE_DIR" "$BRANCH"
+echo "Copying untracked files..."
+untracked_files="$(git -C "$SRC_DIR" ls-files --others --exclude-standard)"
+if [ -n "$untracked_files" ]; then
+    while IFS= read -r file; do
+        echo "  $file"
+        dest="$WORKTREE_DIR/$file"
+        mkdir -p "$(dirname "$dest")"
+        cp "$SRC_DIR/$file" "$dest"
+    done <<< "$untracked_files"
+fi
 
 cd "$WORKTREE_DIR"
 
 echo "=== Working in $WORKTREE_DIR ==="
 
 # Copy .pi* dirs from the repo root worktree into the new one
-for src in "$REPO_DIR"/.pi*; do
+for src in "$SRC_DIR"/.pi*; do
   [[ -d "$src" ]] || continue
   base="$(basename "$src")"
   cp -a "$src" "$WORKTREE_DIR/$base"
 done
 
-# Install frontend deps
-cd frontend
-bun install
-cd ..
+pids=()
+echo "Running uv sync in backend..."
+(cd backend && uv sync) &
+pids+=($!)
 
-# Install backend deps
-cd backend
-uv sync
-cd ..
+echo "Running bun install in frontend..."
+(cd frontend && bun install) &
+pids+=($!)
+for pid in "${pids[@]}"; do wait "$pid"; done
 
-# Start pi with the initial prompt
-# Using the first available method to invoke pi
-exec pi -p "$PROMPT"
+echo "Done. Worktree is at: $WORKTREE_DIR"
