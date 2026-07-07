@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <branch-name> <initial-prompt>"
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <branch-name>"
   exit 1
 fi
 
 BRANCH="$1"
-PROMPT="$2"
 
 SRC_DIR="$(git rev-parse --show-toplevel)"
 
