@@ -8,9 +8,6 @@ const config = {
       strategy: 'spa',
       fallback: 'index.html',
     }),
-    prerender: {
-      entries: ['*'],
-    },
   },
   preprocess: vitePreprocess(),
 };
