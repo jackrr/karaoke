@@ -66,7 +66,6 @@ class SessionResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_db()
-    start_db()  # Initialize the DB for this lifespan instance
     yield
     await close_db()
 
