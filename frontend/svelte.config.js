@@ -5,7 +5,6 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
   kit: {
     adapter: adapter({
-      strategy: 'spa',
       fallback: 'index.html',
     }),
   },
