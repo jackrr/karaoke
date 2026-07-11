@@ -14,7 +14,7 @@
     "test": "vitest run --reporter=basic",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "check": "svelte-check --tsconfig tsconfig.json && prettier --check ."
+    "check": "svelte-kit sync && svelte-check --tsconfig tsconfig.json && prettier --check ."
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.0",
