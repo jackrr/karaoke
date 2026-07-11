@@ -1,5 +1,0 @@
-# E2E test runtime — generated log files and PID tracking
-tmp/
-playwright-report/
-test-results/
-trace.zip

@@ -1,27 +1,16 @@
-# E2E test artifacts
+# Pi / Dev workflow
+.pi/
+.pi-subagents/
+worktrees/
 tmp/
-playwright-report/
-test-results/
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
-env/
-
-# Frontend
-dist/
-build/
-**/.svelte-kit/
-**/node_modules/
-
 
 # OS
 .DS_Store
 Thumbs.db
 
-.pi/
-.pi-subagents/
-worktrees/
+# Bun/Svelte
+node_modules/
+build/
+.svelte-kit/
+coverage/
+
