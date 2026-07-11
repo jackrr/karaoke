@@ -4,5 +4,5 @@ export function capitalize(str: string): string {
 }
 
 export function formatPasscode(code: string): string {
-  return code.match(/.{1,2}/g)?.join('-') ?? code;
+  return code.match(/.{1,2}/g)?.join("-") ?? code;
 }
