@@ -1,3 +1,4 @@
+from tests.conftest import WsTestClient
 from app.websocket_manager import manager
 
 
@@ -27,4 +28,6 @@ def test_websocket_discards_on_disconnect(client: WsTestClient) -> None:
         assert len(manager.active[session_id]) == 1
 
     # after leaving the context, it should be discarded
-    assert session_id not in manager.active, f"Session {session_id} should be discarded after disconnect"
+    assert session_id not in manager.active, (
+        f"Session {session_id} should be discarded after disconnect"
+    )

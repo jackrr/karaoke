@@ -22,14 +22,11 @@ A little web app for doing karaoke as a group.
 ### Backend
 
 ```bash
-uv venv
 cd backend && uv sync
 uv run fastapi dev app/main.py
 ```
 
 The API runs at **http://localhost:8000**. A SQLite database (`karaoke.db`) is created automatically when the app starts.
-
-Backend dependencies are managed via [uv](https://docs.astral.sh/uv/) in `backend/pyproject.toml`.
 
 ### Frontend (Bun + Svelte)
 

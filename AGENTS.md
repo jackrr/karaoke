@@ -14,3 +14,33 @@ When asked to make any kind of change to the codebase (feature, bugfix, refactor
 6. Open a DRAFT pull request with all the changes made. The PR title and description should be extremely succinct and cover: 1) why these changes are made, 2) the most significant changes.
 7. Use sway-msg to send me anotification that you're done. Print out the PR url on github and succinctly summarize all work you and the subagents did so I can begin review.
 
+## Verifying changes
+
+### Frontend
+
+Ensure static analysis checks pass:
+
+```
+cd frontend && bun run check
+```
+
+Ensure tests pass:
+
+```
+cd frontend && bun run test
+```
+
+### Backend
+
+Ensure static analysis checks pass:
+
+```
+cd backend && uv run ruff
+cd backend && uv run ty check
+```
+
+Ensure tests pass:
+
+```
+cd backend && uv run pytest tests/
+```
