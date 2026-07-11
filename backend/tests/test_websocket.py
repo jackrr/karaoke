@@ -23,7 +23,7 @@ def test_websocket_broadcast(client: WsTestClient) -> None:
 
 def test_websocket_discards_on_disconnect(client: WsTestClient) -> None:
     session_id = "disconnect-test"
-    with client.websocket_connect(f"/ws/{session_id}") as ws:
+    with client.websocket_connect(f"/ws/{session_id}"):
         assert session_id in manager.active, f"Session {session_id} should be active"
         assert len(manager.active[session_id]) == 1
 

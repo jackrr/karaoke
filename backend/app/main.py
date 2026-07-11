@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from .database import close_db, get_db, start_db
-from .websocket_manager import manager, ws_router
+from .websocket_manager import ws_router
 
 
 class SessionCreate(BaseModel):
