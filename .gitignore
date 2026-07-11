@@ -1,4 +1,16 @@
+# Pi / Dev workflow
+.pi/
+.pi-subagents/
+worktrees/
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bun/Svelte
 node_modules/
 build/
 .svelte-kit/
 coverage/
+
