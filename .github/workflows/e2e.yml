@@ -34,16 +34,21 @@ jobs:
           bun-version: 1.2.14
 
       - name: Install backend deps
-        run: cd ../backend && uv sync --group dev
+        run: uv sync --group dev
+        working-directory: ./backend
 
       - name: Install frontend deps
-        run: cd frontend && bun install --frozen-lockfile
+        run: bun install --frozen-lockfile
+        working-directory: ./frontend
 
       - name: Install e2e deps
-        run: cd e2e && bun install --frozen-lockfile
+        run: bun install --frozen-lockfile
+        working-directory: ./e2e
 
       - name: Install browser binaries
-        run: cd e2e && bunx playwright install --with-deps chromium
+        run: cd bunx playwright install --with-deps chromium
+        working-directory: ./e2e
 
       - name: Run e2e tests
-        run: cd e2e && bun run test
+        run: bun run test
+        working-directory: ./e2e
