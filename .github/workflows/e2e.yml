@@ -46,7 +46,7 @@ jobs:
         working-directory: ./e2e
 
       - name: Install browser binaries
-        run: cd bunx playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
         working-directory: ./e2e
 
       - name: Run e2e tests
