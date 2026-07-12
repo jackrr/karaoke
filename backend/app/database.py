@@ -16,6 +16,20 @@ def start_db(path: str | None = None) -> None:
     _db_connect_task = aiosqlite.connect(db_path)
 
 
+async def create_tables(conn: aiosqlite.Connection) -> None:
+    """Create database tables if they don't exist."""
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    await conn.commit()
+
+
 async def get_db() -> aiosqlite.Connection:
     """Return the singleton async database connection (cached after first use)."""
     global _db_conn, _db_connect_task
@@ -26,6 +40,7 @@ async def get_db() -> aiosqlite.Connection:
             "Database connection not initialized. Ensure the app lifespan or test client has started."
         )
     _db_conn = await _db_connect_task
+    await create_tables(_db_conn)
     return _db_conn
 
 

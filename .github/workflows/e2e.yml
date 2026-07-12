@@ -1,0 +1,49 @@
+name: E2E
+
+on:
+  pull_request:
+    paths:
+      - "e2e/**"
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: playwright
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: e2e
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.14
+
+      - name: Install backend deps
+        run: cd ../backend && uv sync --group dev
+
+      - name: Install frontend deps
+        run: cd frontend && bun install --frozen-lockfile
+
+      - name: Install e2e deps
+        run: cd e2e && bun install --frozen-lockfile
+
+      - name: Install browser binaries
+        run: cd e2e && bunx playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        run: cd e2e && bun run test
