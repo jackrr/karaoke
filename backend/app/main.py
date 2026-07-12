@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .database import close_db, create_tables, get_db, start_db
+from .database import close_db, get_db, start_db
 from .websocket_manager import ws_router, manager
 
 
