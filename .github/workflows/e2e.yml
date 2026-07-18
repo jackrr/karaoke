@@ -7,6 +7,13 @@ on:
       - "frontend/**"
       - "backend/**"
       - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+    paths:
+      - "e2e/**"
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/e2e.yml"
 
 permissions:
   contents: read
