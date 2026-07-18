@@ -4,7 +4,7 @@ from app.websocket_manager import manager
 
 
 async def test_health_check(async_client: AsyncClient) -> None:
-    resp = await async_client.get("/")
+    resp = await async_client.get("/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
 

@@ -1,3 +1,5 @@
+import asyncio
+
 import aiosqlite
 
 from .config import settings
@@ -5,6 +7,7 @@ from .config import settings
 # Singleton database connect coroutine
 _db_connect_task = None
 _db_conn: aiosqlite.Connection | None = None  # cache actual connection
+_db_init_lock = asyncio.Lock()
 
 
 def start_db(path: str | None = None) -> None:
@@ -16,6 +19,20 @@ def start_db(path: str | None = None) -> None:
     _db_connect_task = aiosqlite.connect(db_path)
 
 
+async def create_tables(conn: aiosqlite.Connection) -> None:
+    """Create database tables if they don't exist."""
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    await conn.commit()
+
+
 async def get_db() -> aiosqlite.Connection:
     """Return the singleton async database connection (cached after first use)."""
     global _db_conn, _db_connect_task
@@ -25,7 +42,11 @@ async def get_db() -> aiosqlite.Connection:
         raise RuntimeError(
             "Database connection not initialized. Ensure the app lifespan or test client has started."
         )
-    _db_conn = await _db_connect_task
+    async with _db_init_lock:
+        # Re-check: another caller may have finished initializing while we waited on the lock.
+        if _db_conn is None:
+            _db_conn = await _db_connect_task
+            await create_tables(_db_conn)
     return _db_conn
 
 

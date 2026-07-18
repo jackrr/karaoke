@@ -1,0 +1,11 @@
+#! /bin/bash
+
+set -eou pipefail
+
+cd frontend
+bun install
+bun run build
+
+cd ../backend
+uv sync
+uv run fastapi dev app/main.py --port 8765
