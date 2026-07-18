@@ -1,10 +1,12 @@
 {
-  "extends": "tsconfig/preset",
   "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
     "esModuleInterop": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "strict": true
+    "strict": true,
+    "skipLibCheck": true
   },
   "include": ["**/*.ts"]
 }

@@ -1,3 +1,5 @@
+import { getClientId } from "./identity";
+
 const API_BASE = "/";
 
 async function json<T>(res: Response): Promise<T> {
@@ -12,14 +14,43 @@ export async function listSessions() {
   return json<{ sessions: Array<{ id: string; name: string }> }>(res);
 }
 
-export async function createSession(name: string) {
+export async function createSession(name: string, displayName: string) {
   const res = await fetch(`${API_BASE}sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({
+      name,
+      display_name: displayName,
+      client_id: getClientId(),
+    }),
   });
   if (!res.ok) throw new Error("Failed to create session");
-  return json<{ id: string; name: string }>(res);
+  return json<{
+    id: string;
+    name: string;
+    passcode: string;
+    host_client_id: string;
+    client_id: string;
+  }>(res);
+}
+
+export async function joinSession(passcode: string, displayName: string) {
+  const res = await fetch(`${API_BASE}sessions/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      passcode,
+      display_name: displayName,
+      client_id: getClientId(),
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to join session");
+  return json<{
+    id: string;
+    name: string;
+    client_id: string;
+    is_host: boolean;
+  }>(res);
 }
 
 export async function getSession(id: string) {
@@ -31,12 +62,21 @@ export async function getSession(id: string) {
     name: string;
     created_at: string;
     online: number;
+    passcode: string;
+    host_client_id: string;
+    participants: Array<{
+      client_id: string;
+      display_name: string;
+      is_host: boolean;
+    }>;
   }>(res);
 }
 
 export async function leaveSession(id: string) {
   const res = await fetch(`${API_BASE}sessions/${id}/leave`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client_id: getClientId() }),
   });
   if (!res.ok && res.status !== 204) {
     throw new Error("Failed to leave session");
@@ -54,7 +94,10 @@ export function createSessionWebSocket(
   },
 ) {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${location.host}/ws/${sessionId}`);
+  const clientId = getClientId();
+  const ws = new WebSocket(
+    `${protocol}//${location.host}/ws/${sessionId}?client_id=${encodeURIComponent(clientId)}`,
+  );
   let connected = false;
 
   ws.onopen = () => {

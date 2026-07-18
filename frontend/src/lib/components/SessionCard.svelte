@@ -5,6 +5,8 @@
   export let passcode: string = '';
   export let host: string = '';
   export let queued: number = 0;
+  export let participants: Array<{ client_id: string; display_name: string; is_host: boolean }> =
+    [];
 </script>
 
 <article class="session-card">
@@ -16,6 +18,13 @@
   <div class="stats">
     <span class="badge">{queued} track{queued === 1 ? '' : 's'} queued</span>
   </div>
+  {#if participants.length}
+    <ul class="participants">
+      {#each participants as p (p.client_id)}
+        <li>{p.display_name}{p.is_host ? ' (host)' : ''}</li>
+      {/each}
+    </ul>
+  {/if}
 </article>
 
 <style>
@@ -55,6 +64,22 @@
   .badge {
     display: inline-block;
     color: #555;
+    font-size: 0.85rem;
+  }
+
+  .participants {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .participants li {
+    background: #f0f0f0;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
     font-size: 0.85rem;
   }
 </style>
