@@ -53,6 +53,13 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
     await conn.commit()
 
 
+async def cleanup_tables(conn: aiosqlite.Connection) -> None:
+    """Drop database tables (for test teardown)."""
+    await conn.execute("DROP TABLE IF EXISTS session_members")
+    await conn.execute("DROP TABLE IF EXISTS sessions")
+    await conn.commit()
+
+
 async def get_db() -> aiosqlite.Connection:
     """Return the singleton async database connection (cached after first use)."""
     global _db_conn, _db_connect_task

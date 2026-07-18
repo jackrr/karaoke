@@ -7,7 +7,7 @@ from httpx import AsyncClient, ASGITransport
 import pytest
 
 from app.main import app
-from app.database import create_tables, get_db, start_db
+from app.database import cleanup_tables, create_tables, get_db, start_db
 
 # Initialize DB at import time so all fixtures can use it
 _temp_dir = Path(os.environ.get("KARAOKE_TEST_DB_DIR", "/tmp/karaoke-test-db"))
@@ -68,9 +68,7 @@ async def _setup_and_teardown_db():
     await create_tables(conn)
     yield
     # Clean up data - remove all tables to ensure isolation
-    await conn.execute("DROP TABLE IF EXISTS session_members")
-    await conn.execute("DROP TABLE IF EXISTS sessions")
-    await conn.commit()
+    await cleanup_tables(conn)
 
 
 @pytest.fixture(autouse=True, scope="session")

@@ -112,11 +112,7 @@ async def create_session(body: SessionCreate) -> SessionCreateResponse:
     else:
         raise RuntimeError("Failed to create session with a unique passcode")
 
-    await db.execute(
-        "INSERT INTO session_members (session_id, client_id, display_name) VALUES (?, ?, ?)",
-        (sid, host_client_id, body.display_name),
-    )
-    await db.commit()
+    await _upsert_member(db, sid, host_client_id, body.display_name)
     return SessionCreateResponse(
         id=sid,
         name=body.name,
