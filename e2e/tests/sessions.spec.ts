@@ -24,15 +24,11 @@ test('list sessions after creation via UI', async ({ page }) => {
 });
 
 test('session page shows connected status and chat input', async ({ page }) => {
-  // Create a session directly via API to ensure it's persisted before navigating
-  const response = await page.request.post('/sessions', {
-    data: { name: 'My Session' },
-  });
-  const session = await response.json();
-  const sessionId = session.id;
-
-  // Navigate to the session page
-  await page.goto(`/session/${sessionId}`);
+  // Create via the UI so the browser's identity is registered as the host
+  // member (a session created via a bare API call from outside the page
+  // would not be a recognized websocket member of its own session).
+  await page.goto('/');
+  await createSessionViaUI(page, 'My Session');
 
   // Wait for the session page to fully load (heading should appear)
   await expect(page.getByRole('heading', { name: 'My Session' })).toBeVisible({

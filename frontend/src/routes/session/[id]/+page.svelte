@@ -1,16 +1,33 @@
 <script lang="ts">
-  import { capitalize } from '$lib/utils/string';
   import { getSession, leaveSession, createSessionWebSocket } from '$lib/api';
+  import { getDisplayName } from '$lib/identity';
+  import SessionCard from '$lib/components/SessionCard.svelte';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
 
-  let session = $state<{ name: string; online: number } | null>(null);
+  type Participant = { client_id: string; display_name: string; is_host: boolean };
+  type SessionData = {
+    id: string;
+    name: string;
+    online: number;
+    passcode: string;
+    host_client_id: string;
+    participants: Participant[];
+  };
+
+  let session = $state<SessionData | null>(null);
   let loading = $state(true);
   let connected = $state(false);
   let message = $state('');
   let messages = $state<Array<{ sender: string; text: string; type?: string }>>([]);
   let ws: ReturnType<typeof createSessionWebSocket> | null = null;
   let sessionId = '';
+  const displayName = getDisplayName();
+
+  async function refreshSession() {
+    const data = await getSession(sessionId);
+    if (data) session = data;
+  }
 
   onMount(async () => {
     sessionId = new URL(window.location.href).pathname.replace('/session/', '');
@@ -33,6 +50,8 @@
         const typed = msg as { type: string; data: { text: string; sender: string } };
         if (typed.type === 'message' && typed.data?.text) {
           messages.push({ sender: typed.data.sender ?? 'unknown', text: typed.data.text, type: typed.type });
+        } else if (typed.type === 'member_joined' || typed.type === 'member_left') {
+          refreshSession();
         }
       },
     });
@@ -51,13 +70,18 @@
     if (!ws || !message.trim()) return;
     // The server broadcasts to every connection in the session, including the
     // sender's own socket — `onMessage` renders it, so don't also push here.
-    ws.send('message', { text: message.trim(), sender: 'you' });
+    ws.send('message', { text: message.trim(), sender: displayName });
     message = '';
   }
 </script>
 
 {#if session}
-  <h1>{capitalize(session.name)}</h1>
+  <SessionCard
+    title={session.name}
+    passcode={session.passcode}
+    host={session.participants.find((p) => p.is_host)?.display_name ?? ''}
+    participants={session.participants}
+  />
   <p class="online">{session.online} online</p>
 
   <p class="status" class:connected>{connected ? 'Connected' : 'Disconnected'}</p>
@@ -83,8 +107,6 @@
 {/if}
 
 <style>
-  h1 { font-size: 2rem; }
-
   .online { color: #666; }
 
   .connected { color: #16a34a; }
@@ -122,7 +144,7 @@
   .loading {
     margin: 1rem;
   }
-  
+
   .chat-form {
     display: flex;
     gap: 1rem;

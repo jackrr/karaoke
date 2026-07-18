@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { createSession, listSessions } from '$lib/api';
+  import { getDisplayName } from '$lib/identity';
   import { capitalize } from '$lib/utils/string';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -8,6 +9,7 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let sessions = $state<{ id: string; name: string }[]>([]);
+  let sessionName = $state('');
 
   onMount(async () => {
     try {
@@ -19,10 +21,14 @@
   });
 
   async function handleCreateSession() {
+    if (!sessionName.trim()) {
+      error = 'Enter a session name';
+      return;
+    }
     loading = true;
     error = null;
     try {
-      const result = await createSession('My Session');
+      const result = await createSession(sessionName.trim(), getDisplayName());
       await goto(`/session/${result.id}`);
     } catch {
       error = 'Failed to create session';
@@ -45,7 +51,17 @@
   <p class="loading">Loading sessions...</p>
 {/if}
 
-<button class="btn btn-primary" onclick={handleCreateSession}>Create Session</button>
+<form class="create-form" onsubmit={(e) => { e.preventDefault(); handleCreateSession(); }}>
+  <input
+    class="session-name-input"
+    bind:value={sessionName}
+    placeholder="Session name"
+    aria-label="Session name"
+  />
+  <button type="submit" class="btn btn-primary">Create Session</button>
+</form>
+
+<p class="join-link"><a href="/join">Have a passcode? Join a session</a></p>
 
 {#if sessions.length}
   <div class="session-list">
@@ -114,5 +130,28 @@
     gap: 1rem;
     justify-content: center;
     padding: 2rem;
+  }
+
+  .create-form {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .session-name-input {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1rem;
+  }
+
+  .join-link {
+    text-align: center;
+    margin-top: 1rem;
+  }
+
+  .join-link a {
+    color: #4a90d9;
   }
 </style>

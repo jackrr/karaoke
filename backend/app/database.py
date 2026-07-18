@@ -26,10 +26,37 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
         CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
+            passcode TEXT NOT NULL UNIQUE,
+            host_client_id TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS session_members (
+            session_id TEXT NOT NULL,
+            client_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            left_at TIMESTAMP,
+            PRIMARY KEY (session_id, client_id)
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_session_members_session_id
+        ON session_members (session_id)
+        """
+    )
+    await conn.commit()
+
+
+async def cleanup_tables(conn: aiosqlite.Connection) -> None:
+    """Drop database tables (for test teardown)."""
+    await conn.execute("DROP TABLE IF EXISTS session_members")
+    await conn.execute("DROP TABLE IF EXISTS sessions")
     await conn.commit()
 
 

@@ -26,6 +26,7 @@ export default defineConfig({
             "**/*.test.svelte",
             "**/*.test.{html,md,vue,astro}",
           ],
+          environment: "jsdom",
           globals: true,
         },
       },
