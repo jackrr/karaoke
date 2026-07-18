@@ -1,7 +1,7 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices, type PlaywrightTestConfig } from "@playwright/test";
 
 /** @type {import('@playwright/test').PlaywrightTestConfig} */
-export default defineConfig({
+export const baseConfig: PlaywrightTestConfig = {
   testDir: "./tests",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -22,4 +22,6 @@ export default defineConfig({
   ],
 
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-});
+};
+
+export default defineConfig(baseConfig);
