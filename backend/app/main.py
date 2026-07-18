@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -76,4 +77,24 @@ async def leave_session(session_id: str) -> None:
 
 _FRONTEND_STATIC_PATH = Path(__file__).resolve().parent.parent.parent / "frontend" / "build"
 if _FRONTEND_STATIC_PATH.exists():
-    app.mount("/", StaticFiles(directory=str(_FRONTEND_STATIC_PATH), html=True), name="frontend")
+    app.mount(
+        "/_app", StaticFiles(directory=str(_FRONTEND_STATIC_PATH / "_app")), name="frontend-assets"
+    )
+
+    _INDEX_HTML_PATH = _FRONTEND_STATIC_PATH / "index.html"
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str) -> FileResponse:
+        """Serve a static file if it exists, else fall back to the SPA shell.
+
+        `full_path` is client-side routed (e.g. `/session/<id>`), so any path
+        that isn't a real static asset must still return `index.html` for the
+        SvelteKit router to pick up.
+        """
+        candidate = (_FRONTEND_STATIC_PATH / full_path).resolve()
+        if (
+            candidate.is_file()
+            and candidate.is_relative_to(_FRONTEND_STATIC_PATH)
+        ):
+            return FileResponse(candidate)
+        return FileResponse(_INDEX_HTML_PATH)

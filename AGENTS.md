@@ -44,3 +44,9 @@ Ensure tests pass:
 ```
 cd backend && uv run pytest tests/
 ```
+
+### E2e Tests
+
+```
+cd e2e && bun run test
+```

@@ -16,6 +16,7 @@
     sessionId = new URL(window.location.href).pathname.replace('/session/', '');
     const data = await getSession(sessionId);
     if (!data) {
+      loading = false;
       return;
     }
     session = data;
@@ -48,8 +49,9 @@
 
   function handleSend() {
     if (!ws || !message.trim()) return;
+    // The server broadcasts to every connection in the session, including the
+    // sender's own socket — `onMessage` renders it, so don't also push here.
     ws.send('message', { text: message.trim(), sender: 'you' });
-    messages.push({ sender: 'you', text: message.trim(), type: 'message' });
     message = '';
   }
 </script>

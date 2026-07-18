@@ -45,6 +45,8 @@
   <p class="loading">Loading sessions...</p>
 {/if}
 
+<button class="btn btn-primary" onclick={handleCreateSession}>Create Session</button>
+
 {#if sessions.length}
   <div class="session-list">
     {#each sessions as s}
@@ -82,6 +84,11 @@
     font-size: 1rem;
     cursor: pointer;
     transition: opacity 0.15s;
+  }
+
+  .btn-primary {
+    background: #4a90d9;
+    color: #fff;
   }
 
   .btn-secondary {
