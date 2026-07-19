@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "e2e/**"
+      - "!e2e/screenshots/**"
       - "frontend/**"
       - "backend/**"
       - ".github/workflows/e2e.yml"
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - "e2e/**"
+      - "!e2e/screenshots/**"
       - "frontend/**"
       - "backend/**"
       - ".github/workflows/e2e.yml"
