@@ -161,6 +161,40 @@ async def test_post_valid_url_downloads_successfully(async_client: AsyncClient, 
     assert track["lyrics_path"]
 
 
+async def test_skip_track_download_reaches_ready_without_real_download(
+    async_client: AsyncClient, monkeypatch
+) -> None:
+    """When settings.skip_track_download is set (the e2e/CI seam), tracks
+    should reach `ready` quickly with placeholder values, without ever
+    invoking the real yt-dlp/demucs helpers."""
+
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("run_yt_dlp_sync should not be called when skip_track_download is set")
+
+    def _fail_if_called_demucs(*args, **kwargs):
+        raise AssertionError("run_demucs_sync should not be called when skip_track_download is set")
+
+    monkeypatch.setattr(tracks_module, "run_yt_dlp_sync", _fail_if_called)
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fail_if_called_demucs)
+    monkeypatch.setattr(tracks_module.settings, "skip_track_download", True)
+
+    session = await _create_session(async_client)
+
+    resp = await async_client.post(
+        f"/sessions/{session['id']}/tracks",
+        json={"url": VALID_URL, "client_id": session["client_id"]},
+    )
+    assert resp.status_code == 202
+
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "ready"
+    assert track["audio_path"]
+    assert track["title"] == "Stub Track"
+    assert track["duration_seconds"] == 42.0
+    assert track["lyrics_source"] == "none"
+    assert track["lyrics_path"] is None
+
+
 async def test_no_captions_reaches_ready_with_no_lyrics(
     async_client: AsyncClient, monkeypatch
 ) -> None:

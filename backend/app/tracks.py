@@ -284,6 +284,27 @@ async def process_track_download(
         await _update_track(db, track_id, status="downloading")
         await _broadcast_current()
 
+        if settings.skip_track_download:
+            # Test/CI seam: skip real yt-dlp/demucs work entirely and settle
+            # straight into a stable "ready" state with placeholder values,
+            # so e2e tests can exercise queue behavior without network access
+            # or heavy model inference.
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            audio_path = dest_dir / "audio.m4a"
+            await asyncio.to_thread(audio_path.write_bytes, b"fake audio")
+            await _update_track(
+                db,
+                track_id,
+                status="ready",
+                audio_path=str(audio_path),
+                title="Stub Track",
+                duration_seconds=42.0,
+                lyrics_path=None,
+                lyrics_source="none",
+            )
+            await _broadcast_current()
+            return
+
         dest_dir.mkdir(parents=True, exist_ok=True)
         result = await asyncio.to_thread(run_yt_dlp_sync, url, dest_dir)
 

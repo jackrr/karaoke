@@ -5,6 +5,7 @@
   "scripts": {
     "test": "playwright test",
     "screenshots": "playwright test --config=playwright.screenshots.config.ts",
+    "videos": "playwright test --config=playwright.videos.config.ts",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "browsers": "playwright install chromium",

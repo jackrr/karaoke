@@ -17,3 +17,5 @@ coverage/
 # Playwright
 
 test-results/
+e2e/screenshots/
+e2e/videos/
