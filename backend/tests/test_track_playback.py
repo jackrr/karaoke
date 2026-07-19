@@ -57,6 +57,10 @@ def _fake_download_factory(*, with_captions: bool):
     return _fake_run_yt_dlp_sync
 
 
+async def _fake_fetch_synced_lyrics_none(**kwargs):
+    return None
+
+
 def _fake_run_demucs_sync_factory():
     """Build a fake `run_demucs_sync` replacement that writes canned stem
     files instead of running real model inference."""
@@ -80,6 +84,7 @@ async def _create_ready_track(
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=with_captions)
     )
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
     session = await _create_session(async_client)
     resp = await async_client.post(
