@@ -169,7 +169,7 @@ async def _get_playable_track(db, session_id: str, track_id: str) -> dict:
 async def stream_track_audio(session_id: str, track_id: str) -> FileResponse:
     db = await get_db()
     track = await _get_playable_track(db, session_id, track_id)
-    if track["status"] != "downloaded":
+    if track["status"] != "ready":
         raise HTTPException(status_code=409, detail="Track is not ready for playback")
     audio_path = track["audio_path"]
     if not audio_path or not Path(audio_path).is_file():
@@ -181,7 +181,7 @@ async def stream_track_audio(session_id: str, track_id: str) -> FileResponse:
 async def get_track_lyrics(session_id: str, track_id: str) -> FileResponse:
     db = await get_db()
     track = await _get_playable_track(db, session_id, track_id)
-    if track["status"] != "downloaded":
+    if track["status"] != "ready":
         raise HTTPException(status_code=409, detail="Track is not ready for playback")
     lyrics_path = track["lyrics_path"]
     if not lyrics_path or not Path(lyrics_path).is_file():

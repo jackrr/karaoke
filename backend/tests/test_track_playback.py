@@ -1,9 +1,12 @@
 import asyncio
 from pathlib import Path
 
+import numpy as np
+import soundfile as sf
 from httpx import AsyncClient
 
 import app.tracks as tracks_module
+from app import stems
 
 VALID_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
@@ -54,51 +57,71 @@ def _fake_download_factory(*, with_captions: bool):
     return _fake_run_yt_dlp_sync
 
 
-async def _create_downloaded_track(
+def _fake_run_demucs_sync_factory():
+    """Build a fake `run_demucs_sync` replacement that writes canned stem
+    files instead of running real model inference."""
+
+    def _fake_run_demucs_sync(audio_path: Path, dest_dir: Path, model: str):
+        stem_dir = dest_dir / model / audio_path.stem
+        stem_dir.mkdir(parents=True, exist_ok=True)
+        vocals_path = stem_dir / "vocals.wav"
+        no_vocals_path = stem_dir / "no_vocals.wav"
+        samples = np.array([[0.1, 0.1], [0.2, 0.2]], dtype=np.float32)
+        sf.write(str(vocals_path), samples, 44100, subtype="FLOAT")
+        sf.write(str(no_vocals_path), samples, 44100, subtype="FLOAT")
+        return stems.SeparationResult(vocals_path=vocals_path, no_vocals_path=no_vocals_path)
+
+    return _fake_run_demucs_sync
+
+
+async def _create_ready_track(
     async_client: AsyncClient, monkeypatch, *, with_captions: bool = False
 ) -> tuple[dict, dict]:
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=with_captions)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
     session = await _create_session(async_client)
     resp = await async_client.post(
         f"/sessions/{session['id']}/tracks",
         json={"url": VALID_URL, "client_id": session["client_id"]},
     )
     assert resp.status_code == 202
-    track = await _wait_for_status(async_client, session["id"], {"downloaded", "error"})
-    assert track["status"] == "downloaded"
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "ready"
     return session, track
 
 
 async def test_audio_stream_returns_200_with_correct_bytes(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    session, track = await _create_downloaded_track(async_client, monkeypatch)
+    session, track = await _create_ready_track(async_client, monkeypatch)
+    expected_bytes = Path(track["audio_path"]).read_bytes()
     resp = await async_client.get(
         f"/sessions/{session['id']}/tracks/{track['id']}/audio"
     )
     assert resp.status_code == 200
-    assert resp.content == b"fake audio"
+    assert resp.content == expected_bytes
 
 
 async def test_audio_stream_honors_range_requests(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    session, track = await _create_downloaded_track(async_client, monkeypatch)
+    session, track = await _create_ready_track(async_client, monkeypatch)
+    full_bytes = Path(track["audio_path"]).read_bytes()
     resp = await async_client.get(
         f"/sessions/{session['id']}/tracks/{track['id']}/audio",
         headers={"Range": "bytes=2-4"},
     )
     assert resp.status_code == 206
-    assert resp.headers["content-range"] == "bytes 2-4/10"
-    assert resp.content == b"fake audio"[2:5]
+    assert resp.headers["content-range"] == f"bytes 2-4/{len(full_bytes)}"
+    assert resp.content == full_bytes[2:5]
 
 
 async def test_audio_stream_404_when_session_does_not_exist(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    _, track = await _create_downloaded_track(async_client, monkeypatch)
+    _, track = await _create_ready_track(async_client, monkeypatch)
     resp = await async_client.get(
         f"/sessions/nonexistent/tracks/{track['id']}/audio"
     )
@@ -108,7 +131,7 @@ async def test_audio_stream_404_when_session_does_not_exist(
 async def test_audio_stream_404_when_track_belongs_to_different_session(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    _, track = await _create_downloaded_track(async_client, monkeypatch)
+    _, track = await _create_ready_track(async_client, monkeypatch)
     other_session = await _create_session(async_client, name="other")
     resp = await async_client.get(
         f"/sessions/{other_session['id']}/tracks/{track['id']}/audio"
@@ -116,7 +139,7 @@ async def test_audio_stream_404_when_track_belongs_to_different_session(
     assert resp.status_code == 404
 
 
-async def test_audio_stream_409_when_track_not_downloaded_yet(
+async def test_audio_stream_409_when_track_not_ready_yet(
     async_client: AsyncClient, monkeypatch
 ) -> None:
     def _hang_briefly(url: str, dest_dir: Path):
@@ -142,7 +165,7 @@ async def test_audio_stream_409_when_track_not_downloaded_yet(
 async def test_audio_stream_404_when_file_deleted_after_download(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    session, track = await _create_downloaded_track(async_client, monkeypatch)
+    session, track = await _create_ready_track(async_client, monkeypatch)
     Path(track["audio_path"]).unlink()
     resp = await async_client.get(
         f"/sessions/{session['id']}/tracks/{track['id']}/audio"
@@ -153,7 +176,7 @@ async def test_audio_stream_404_when_file_deleted_after_download(
 async def test_lyrics_endpoint_returns_lrc_text(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    session, track = await _create_downloaded_track(
+    session, track = await _create_ready_track(
         async_client, monkeypatch, with_captions=True
     )
     resp = await async_client.get(
@@ -167,7 +190,7 @@ async def test_lyrics_endpoint_returns_lrc_text(
 async def test_lyrics_endpoint_404_when_no_lyrics(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    session, track = await _create_downloaded_track(
+    session, track = await _create_ready_track(
         async_client, monkeypatch, with_captions=False
     )
     assert track["lyrics_source"] == "none"
@@ -177,7 +200,7 @@ async def test_lyrics_endpoint_404_when_no_lyrics(
     assert resp.status_code == 404
 
 
-async def test_lyrics_endpoint_409_when_track_not_downloaded_yet(
+async def test_lyrics_endpoint_409_when_track_not_ready_yet(
     async_client: AsyncClient, monkeypatch
 ) -> None:
     def _hang_briefly(url: str, dest_dir: Path):

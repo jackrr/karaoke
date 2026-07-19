@@ -74,7 +74,7 @@
           {#if track.status === 'error' && track.error_message}
             <span class="error-message">{track.error_message}</span>
           {/if}
-          {#if track.status === 'downloaded'}
+          {#if track.status === 'ready'}
             <button class="btn btn-play" type="button" onclick={() => onPlay(track)}>
               Play
             </button>
