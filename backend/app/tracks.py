@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from .config import settings
 from .database import get_db
+from .lrclib import fetch_synced_lyrics
 from .stems import mix_with_attenuated_vocals, run_demucs_sync
 from .websocket_manager import _is_active_member, manager
 from .youtube import extract_video_id, run_yt_dlp_sync, vtt_to_lrc
@@ -179,8 +180,22 @@ async def process_track_download(
             lyrics_source = "captions"
             lyrics_path_str: str | None = str(lyrics_path)
         else:
-            lyrics_source = "none"
-            lyrics_path_str = None
+            await _update_track(db, track_id, status="fetching_lyrics")
+            await _broadcast_current()
+            lrc_content = await fetch_synced_lyrics(
+                title=result.title,
+                artist=result.artist,
+                album=result.album,
+                duration=result.duration_seconds,
+            )
+            if lrc_content:
+                lyrics_path = dest_dir / "lyrics.lrc"
+                await asyncio.to_thread(lyrics_path.write_text, lrc_content)
+                lyrics_source = "lrclib"
+                lyrics_path_str = str(lyrics_path)
+            else:
+                lyrics_source = "none"
+                lyrics_path_str = None
 
         await _update_track(db, track_id, status="stemming")
         await _broadcast_current()
