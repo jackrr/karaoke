@@ -1,9 +1,10 @@
 <script lang="ts">
   import { DuplicateTrackError, type Track } from '../api';
 
-  let { tracks = [], onSubmit }: {
+  let { tracks = [], onSubmit, onPlay }: {
     tracks: Track[];
     onSubmit: (url: string) => Promise<Track>;
+    onPlay: (track: Track) => void;
   } = $props();
 
   let url = $state('');
@@ -72,6 +73,11 @@
           </span>
           {#if track.status === 'error' && track.error_message}
             <span class="error-message">{track.error_message}</span>
+          {/if}
+          {#if track.status === 'ready'}
+            <button class="btn btn-play" type="button" onclick={() => onPlay(track)}>
+              Play
+            </button>
           {/if}
         </li>
       {/each}
@@ -145,5 +151,10 @@
   .error-message {
     font-size: 0.8rem;
     color: #d32f2f;
+  }
+
+  .btn-play {
+    padding: 0.2rem 0.75rem;
+    font-size: 0.85rem;
   }
 </style>

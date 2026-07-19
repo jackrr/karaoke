@@ -3,6 +3,7 @@
   import { getDisplayName } from '$lib/identity';
   import SessionCard from '$lib/components/SessionCard.svelte';
   import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
+  import TrackPlayer from '$lib/components/TrackPlayer.svelte';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
 
@@ -22,6 +23,7 @@
   let message = $state('');
   let messages = $state<Array<{ sender: string; text: string; type?: string }>>([]);
   let tracks = $state<Track[]>([]);
+  let nowPlaying = $state<Track | null>(null);
   let ws: ReturnType<typeof createSessionWebSocket> | null = null;
   let sessionId = '';
   const displayName = getDisplayName();
@@ -124,7 +126,16 @@
     <button type="submit" class="btn btn-primary">Send</button>
   </form>
 
-  <YoutubeDownloadForm {tracks} onSubmit={handleSubmitTrack} />
+  <YoutubeDownloadForm
+    {tracks}
+    onSubmit={handleSubmitTrack}
+    onPlay={(t) => (nowPlaying = t)}
+  />
+
+  {#if nowPlaying}
+    <TrackPlayer {sessionId} track={nowPlaying} />
+    <button class="btn btn-secondary" onclick={() => (nowPlaying = null)}>Stop</button>
+  {/if}
 
   <button class="btn btn-secondary" onclick={handleLeave}>Leave Session</button>
 {:else if loading}

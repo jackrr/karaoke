@@ -1,4 +1,5 @@
 import asyncio
+import mimetypes
 import shutil
 import sqlite3
 from pathlib import Path
@@ -6,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from .config import settings
@@ -17,6 +18,19 @@ from .websocket_manager import _is_active_member, manager
 from .youtube import extract_video_id, run_yt_dlp_sync, vtt_to_lrc
 
 tracks_router = APIRouter()
+
+_AUDIO_MEDIA_TYPES = {
+    ".webm": "audio/webm",
+    ".m4a": "audio/mp4",
+    ".opus": "audio/ogg",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+}
+
+
+def _guess_audio_media_type(path_str: str) -> str:
+    ext = Path(path_str).suffix.lower()
+    return _AUDIO_MEDIA_TYPES.get(ext) or mimetypes.guess_type(path_str)[0] or "application/octet-stream"
 
 _TRACK_COLUMNS = (
     "id, session_id, source_url, youtube_video_id, title, status, error_message, "
@@ -141,6 +155,39 @@ async def list_tracks(session_id: str) -> dict:
     ) as cursor:
         rows = await cursor.fetchall()
     return {"tracks": [_row_to_track(row) for row in rows]}
+
+
+async def _get_playable_track(db, session_id: str, track_id: str) -> dict:
+    if not await _session_exists(db, session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    track = await _get_track(db, track_id)
+    if track is None or track["session_id"] != session_id:
+        raise HTTPException(status_code=404, detail="Track not found")
+    return track
+
+
+@tracks_router.get("/sessions/{session_id}/tracks/{track_id}/audio")
+async def stream_track_audio(session_id: str, track_id: str) -> FileResponse:
+    db = await get_db()
+    track = await _get_playable_track(db, session_id, track_id)
+    if track["status"] != "ready":
+        raise HTTPException(status_code=409, detail="Track is not ready for playback")
+    audio_path = track["audio_path"]
+    if not audio_path or not Path(audio_path).is_file():
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return FileResponse(audio_path, media_type=_guess_audio_media_type(audio_path))
+
+
+@tracks_router.get("/sessions/{session_id}/tracks/{track_id}/lyrics")
+async def get_track_lyrics(session_id: str, track_id: str) -> FileResponse:
+    db = await get_db()
+    track = await _get_playable_track(db, session_id, track_id)
+    if track["status"] != "ready":
+        raise HTTPException(status_code=409, detail="Track is not ready for playback")
+    lyrics_path = track["lyrics_path"]
+    if not lyrics_path or not Path(lyrics_path).is_file():
+        raise HTTPException(status_code=404, detail="No lyrics available for this track")
+    return FileResponse(lyrics_path, media_type="text/plain")
 
 
 async def _update_track(db, track_id: str, **fields) -> None:
