@@ -133,6 +133,25 @@ export async function listTracks(sessionId: string) {
   return data.tracks;
 }
 
+export function getTrackAudioUrl(sessionId: string, trackId: string): string {
+  return `${API_BASE}sessions/${sessionId}/tracks/${trackId}/audio`;
+}
+
+export class LyricsNotAvailableError extends Error {}
+
+export async function fetchTrackLyrics(
+  sessionId: string,
+  trackId: string,
+): Promise<string> {
+  const res = await fetch(
+    `${API_BASE}sessions/${sessionId}/tracks/${trackId}/lyrics`,
+  );
+  if (res.status === 404)
+    throw new LyricsNotAvailableError("No lyrics available");
+  if (!res.ok) throw new Error("Failed to fetch lyrics");
+  return res.text();
+}
+
 // ---- WebSocket helpers ----
 
 export function createSessionWebSocket(
