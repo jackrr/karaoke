@@ -50,11 +50,44 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
         ON session_members (session_id)
         """
     )
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tracks (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL REFERENCES sessions(id),
+            source_url TEXT NOT NULL,
+            youtube_video_id TEXT NOT NULL,
+            title TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            error_message TEXT,
+            audio_path TEXT,
+            lyrics_path TEXT,
+            lyrics_source TEXT,
+            duration_seconds REAL,
+            requested_by_client_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_tracks_session_id ON tracks (session_id)
+        """
+    )
+    await conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_session_video
+            ON tracks (session_id, youtube_video_id)
+            WHERE status != 'error'
+        """
+    )
     await conn.commit()
 
 
 async def cleanup_tables(conn: aiosqlite.Connection) -> None:
     """Drop database tables (for test teardown)."""
+    await conn.execute("DROP TABLE IF EXISTS tracks")
     await conn.execute("DROP TABLE IF EXISTS session_members")
     await conn.execute("DROP TABLE IF EXISTS sessions")
     await conn.commit()

@@ -80,4 +80,19 @@ def _close_db_on_exit():
     asyncio.run(close_db())
 
 
+@pytest.fixture(autouse=True)
+def _isolate_storage_dir(tmp_path, monkeypatch):
+    """Redirect `settings.storage_dir` to a per-test tmp_path so any test that
+    exercises the real download pipeline never writes into the repo's
+    `backend/storage/` directory.
+
+    Patches the shared `settings` singleton (imported by both `app.config`
+    and `app.tracks`), mirroring how `_setup_and_teardown_db` isolates the
+    database per test.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "storage_dir", str(tmp_path / "storage"))
+
+
 

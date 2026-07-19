@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { getSession, leaveSession, createSessionWebSocket } from '$lib/api';
+  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, type Track } from '$lib/api';
   import { getDisplayName } from '$lib/identity';
   import SessionCard from '$lib/components/SessionCard.svelte';
+  import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
 
@@ -20,6 +21,7 @@
   let connected = $state(false);
   let message = $state('');
   let messages = $state<Array<{ sender: string; text: string; type?: string }>>([]);
+  let tracks = $state<Track[]>([]);
   let ws: ReturnType<typeof createSessionWebSocket> | null = null;
   let sessionId = '';
   const displayName = getDisplayName();
@@ -38,6 +40,7 @@
     }
     session = data;
     loading = false;
+    tracks = await listTracks(sessionId);
 
     ws = createSessionWebSocket(sessionId, {
       onOpen: () => {
@@ -47,15 +50,35 @@
         connected = false;
       },
       onMessage: (msg) => {
-        const typed = msg as { type: string; data: { text: string; sender: string } };
+        const typed = msg as { type: string; data: any };
         if (typed.type === 'message' && typed.data?.text) {
           messages.push({ sender: typed.data.sender ?? 'unknown', text: typed.data.text, type: typed.type });
         } else if (typed.type === 'member_joined' || typed.type === 'member_left') {
           refreshSession();
+        } else if (typed.type === 'track_added') {
+          const added = typed.data as Track;
+          const idx = tracks.findIndex((t) => t.id === added.id);
+          if (idx === -1) {
+            tracks.push(added);
+          } else {
+            tracks[idx] = added;
+          }
+        } else if (typed.type === 'track_updated') {
+          const updated = typed.data as Track;
+          const idx = tracks.findIndex((t) => t.id === updated.id);
+          if (idx === -1) {
+            tracks.push(updated);
+          } else {
+            tracks[idx] = updated;
+          }
         }
       },
     });
   });
+
+  async function handleSubmitTrack(url: string) {
+    return submitYoutubeUrl(sessionId, url);
+  }
 
   onDestroy(() => {
     ws?.close();
@@ -100,6 +123,8 @@
     <input class="chat-input" bind:value={message} placeholder="Type a message..." />
     <button type="submit" class="btn btn-primary">Send</button>
   </form>
+
+  <YoutubeDownloadForm {tracks} onSubmit={handleSubmitTrack} />
 
   <button class="btn btn-secondary" onclick={handleLeave}>Leave Session</button>
 {:else if loading}
