@@ -33,15 +33,27 @@ def _guess_audio_media_type(path_str: str) -> str:
     return _AUDIO_MEDIA_TYPES.get(ext) or mimetypes.guess_type(path_str)[0] or "application/octet-stream"
 
 _TRACK_COLUMNS = (
-    "id, session_id, source_url, youtube_video_id, title, status, error_message, "
-    "audio_path, lyrics_path, lyrics_source, duration_seconds, requested_by_client_id, "
-    "created_at, updated_at"
+    "tracks.id, tracks.session_id, tracks.source_url, tracks.youtube_video_id, "
+    "tracks.title, tracks.status, tracks.error_message, tracks.audio_path, "
+    "tracks.lyrics_path, tracks.lyrics_source, tracks.duration_seconds, "
+    "tracks.requested_by_client_id, tracks.position, tracks.created_at, "
+    "tracks.updated_at, sm.display_name AS requested_by_display_name"
+)
+
+_TRACK_FROM = (
+    "FROM tracks LEFT JOIN session_members sm "
+    "ON sm.session_id = tracks.session_id AND sm.client_id = tracks.requested_by_client_id"
 )
 
 
 class TrackCreate(BaseModel):
     url: str
     client_id: str
+
+
+class TrackOrder(BaseModel):
+    client_id: str
+    track_ids: list[str]
 
 
 def _row_to_track(row: Any) -> dict:
@@ -58,8 +70,10 @@ def _row_to_track(row: Any) -> dict:
         lyrics_source,
         duration_seconds,
         requested_by_client_id,
+        position,
         created_at,
         updated_at,
+        requested_by_display_name,
     ) = row
     return {
         "id": id_,
@@ -74,14 +88,16 @@ def _row_to_track(row: Any) -> dict:
         "lyrics_source": lyrics_source,
         "duration_seconds": duration_seconds,
         "requested_by_client_id": requested_by_client_id,
+        "position": position,
         "created_at": created_at,
         "updated_at": updated_at,
+        "requested_by_display_name": requested_by_display_name,
     }
 
 
 async def _get_track(db, track_id: str) -> dict | None:
     async with db.execute(
-        f"SELECT {_TRACK_COLUMNS} FROM tracks WHERE id = ?", (track_id,)
+        f"SELECT {_TRACK_COLUMNS} {_TRACK_FROM} WHERE tracks.id = ?", (track_id,)
     ) as cursor:
         row = await cursor.fetchone()
     return _row_to_track(row) if row else None
@@ -112,16 +128,22 @@ async def create_track(
 
     track_id = str(uuid4())
     try:
+        # Compute the next position with an inline scalar subquery so the read
+        # (MAX position) and write (INSERT) happen as a single awaited
+        # execute() call, with no yield point back to the event loop between
+        # them. This avoids a race where two concurrent inserts for the same
+        # session could otherwise compute the same next position.
         await db.execute(
             "INSERT INTO tracks (id, session_id, source_url, youtube_video_id, "
-            "status, requested_by_client_id) VALUES (?, ?, ?, ?, 'pending', ?)",
-            (track_id, session_id, body.url, video_id, body.client_id),
+            "status, requested_by_client_id, position) VALUES (?, ?, ?, ?, 'pending', ?, "
+            "(SELECT COALESCE(MAX(position), -1) + 1 FROM tracks WHERE session_id = ?))",
+            (track_id, session_id, body.url, video_id, body.client_id, session_id),
         )
         await db.commit()
     except sqlite3.IntegrityError:
         async with db.execute(
-            f"SELECT {_TRACK_COLUMNS} FROM tracks "
-            "WHERE session_id = ? AND youtube_video_id = ? AND status != 'error'",
+            f"SELECT {_TRACK_COLUMNS} {_TRACK_FROM} "
+            "WHERE tracks.session_id = ? AND tracks.youtube_video_id = ? AND tracks.status != 'error'",
             (session_id, video_id),
         ) as cursor:
             row = await cursor.fetchone()
@@ -150,7 +172,7 @@ async def list_tracks(session_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Session not found")
 
     async with db.execute(
-        f"SELECT {_TRACK_COLUMNS} FROM tracks WHERE session_id = ? ORDER BY created_at",
+        f"SELECT {_TRACK_COLUMNS} {_TRACK_FROM} WHERE tracks.session_id = ? ORDER BY tracks.position",
         (session_id,),
     ) as cursor:
         rows = await cursor.fetchall()
@@ -188,6 +210,54 @@ async def get_track_lyrics(session_id: str, track_id: str) -> FileResponse:
     if not lyrics_path or not Path(lyrics_path).is_file():
         raise HTTPException(status_code=404, detail="No lyrics available for this track")
     return FileResponse(lyrics_path, media_type="text/plain")
+
+
+async def _list_tracks_ordered(db, session_id: str) -> list[dict]:
+    async with db.execute(
+        f"SELECT {_TRACK_COLUMNS} {_TRACK_FROM} WHERE tracks.session_id = ? ORDER BY tracks.position",
+        (session_id,),
+    ) as cursor:
+        rows = await cursor.fetchall()
+    return [_row_to_track(row) for row in rows]
+
+
+@tracks_router.put("/sessions/{session_id}/tracks/order")
+async def reorder_tracks(session_id: str, body: TrackOrder) -> dict:
+    db = await get_db()
+    if not await _session_exists(db, session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not await _is_active_member(session_id, body.client_id):
+        raise HTTPException(
+            status_code=403, detail="Not an active member of this session"
+        )
+
+    async with db.execute(
+        "SELECT id FROM tracks WHERE session_id = ?", (session_id,)
+    ) as cursor:
+        rows = await cursor.fetchall()
+    existing_ids = {row[0] for row in rows}
+
+    if len(body.track_ids) != len(set(body.track_ids)) or set(body.track_ids) != existing_ids:
+        raise HTTPException(
+            status_code=400, detail="track_ids must exactly match the session's current tracks"
+        )
+
+    # Use a single executemany() call (one awaited statement) rather than a
+    # loop of individually-awaited execute() calls, so there's no yield point
+    # back to the event loop between the individual row updates. Otherwise a
+    # concurrent reorder (or other track mutation) sharing the same singleton
+    # connection could interleave with these updates and produce a torn merge
+    # of two different orderings.
+    await db.executemany(
+        "UPDATE tracks SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [(index, track_id) for index, track_id in enumerate(body.track_ids)],
+    )
+    await db.commit()
+
+    tracks = await _list_tracks_ordered(db, session_id)
+    await manager.broadcast_event(session_id, "queue_reordered", {"tracks": tracks})
+    return {"tracks": tracks}
 
 
 async def _update_track(db, track_id: str, **fields) -> None:

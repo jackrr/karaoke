@@ -18,6 +18,8 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
     lyrics_source: null,
     duration_seconds: null,
     requested_by_client_id: "c1",
+    requested_by_display_name: null,
+    position: 0,
     created_at: "now",
     updated_at: "now",
     ...overrides,
@@ -25,35 +27,10 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
 }
 
 describe("YoutubeDownloadForm", () => {
-  it("renders the form and an empty track list", () => {
-    render(YoutubeDownloadForm, {
-      tracks: [],
-      onSubmit: vi.fn(),
-      onPlay: vi.fn(),
-    });
+  it("renders the form", () => {
+    render(YoutubeDownloadForm, { onSubmit: vi.fn() });
     expect(screen.getByPlaceholderText("Paste a YouTube URL...")).toBeTruthy();
     expect(screen.getByRole("button", { name: /add track/i })).toBeTruthy();
-  });
-
-  it("renders tracks passed in as a prop with their status", () => {
-    render(YoutubeDownloadForm, {
-      tracks: [makeTrack({ status: "downloaded", title: "Song One" })],
-      onSubmit: vi.fn(),
-      onPlay: vi.fn(),
-    });
-    expect(screen.getByText("Song One")).toBeTruthy();
-    expect(screen.getByText("Downloaded")).toBeTruthy();
-  });
-
-  it("shows the error message for a track in error status", () => {
-    render(YoutubeDownloadForm, {
-      tracks: [
-        makeTrack({ status: "error", error_message: "Download failed" }),
-      ],
-      onSubmit: vi.fn(),
-      onPlay: vi.fn(),
-    });
-    expect(screen.getByText("Download failed")).toBeTruthy();
   });
 
   it("disables the submit button while submitting, then re-enables it", async () => {
@@ -64,7 +41,7 @@ describe("YoutubeDownloadForm", () => {
           resolveSubmit = resolve;
         }),
     );
-    render(YoutubeDownloadForm, { tracks: [], onSubmit, onPlay: vi.fn() });
+    render(YoutubeDownloadForm, { onSubmit });
 
     const input = screen.getByPlaceholderText(
       "Paste a YouTube URL...",
@@ -89,7 +66,7 @@ describe("YoutubeDownloadForm", () => {
     const onSubmit = vi.fn(() =>
       Promise.reject(new DuplicateTrackError(existing)),
     );
-    render(YoutubeDownloadForm, { tracks: [], onSubmit, onPlay: vi.fn() });
+    render(YoutubeDownloadForm, { onSubmit });
 
     const input = screen.getByPlaceholderText(
       "Paste a YouTube URL...",
@@ -108,7 +85,7 @@ describe("YoutubeDownloadForm", () => {
 
   it("shows a generic error message on other submission failures", async () => {
     const onSubmit = vi.fn(() => Promise.reject(new Error("boom")));
-    render(YoutubeDownloadForm, { tracks: [], onSubmit, onPlay: vi.fn() });
+    render(YoutubeDownloadForm, { onSubmit });
 
     const input = screen.getByPlaceholderText(
       "Paste a YouTube URL...",

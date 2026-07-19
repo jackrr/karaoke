@@ -7,6 +7,7 @@ import {
   leaveSession,
   submitYoutubeUrl,
   listTracks,
+  reorderTracks,
   DuplicateTrackError,
 } from "./api";
 import { __resetIdentityForTests, getClientId } from "./identity";
@@ -296,6 +297,74 @@ describe("api helpers", () => {
         vi.fn(() => Promise.resolve({ ok: false, status: 500 })),
       );
       await expect(listTracks("abc")).rejects.toThrow();
+    });
+  });
+
+  describe("reorderTracks", () => {
+    it("puts client_id and track_ids, returns reordered tracks", async () => {
+      const tracks = [
+        {
+          id: "t2",
+          session_id: "abc",
+          source_url: "https://youtube.com/watch?v=xyz2",
+          youtube_video_id: "xyz2",
+          title: "Second Song",
+          status: "downloaded",
+          error_message: null,
+          audio_path: "/path2",
+          lyrics_path: null,
+          lyrics_source: "none",
+          duration_seconds: 10,
+          requested_by_client_id: "client-1",
+          requested_by_display_name: "Alice",
+          position: 0,
+          created_at: "now",
+          updated_at: "now",
+        },
+        {
+          id: "t1",
+          session_id: "abc",
+          source_url: "https://youtube.com/watch?v=xyz",
+          youtube_video_id: "xyz",
+          title: "First Song",
+          status: "downloaded",
+          error_message: null,
+          audio_path: "/path",
+          lyrics_path: null,
+          lyrics_source: "none",
+          duration_seconds: 10,
+          requested_by_client_id: "client-1",
+          requested_by_display_name: "Alice",
+          position: 1,
+          created_at: "now",
+          updated_at: "now",
+        },
+      ];
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ tracks }),
+        }),
+      ) as any;
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await reorderTracks("abc", ["t2", "t1"]);
+
+      expect(result).toEqual(tracks);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/sessions/abc/tracks/order");
+      expect(init.method).toBe("PUT");
+      const body = JSON.parse(init.body);
+      expect(body.track_ids).toEqual(["t2", "t1"]);
+      expect(typeof body.client_id).toBe("string");
+    });
+
+    it("throws when the request fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve({ ok: false, status: 400 })),
+      );
+      await expect(reorderTracks("abc", ["t1"])).rejects.toThrow();
     });
   });
 

@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, type Track } from '$lib/api';
+  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, type Track } from '$lib/api';
   import { getDisplayName } from '$lib/identity';
   import SessionCard from '$lib/components/SessionCard.svelte';
   import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
   import TrackPlayer from '$lib/components/TrackPlayer.svelte';
+  import QueueList from '$lib/components/QueueList.svelte';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
 
@@ -24,6 +25,12 @@
   let messages = $state<Array<{ sender: string; text: string; type?: string }>>([]);
   let tracks = $state<Track[]>([]);
   let nowPlaying = $state<Track | null>(null);
+  // Bumped every time `tracks` is replaced wholesale (queue_reordered
+  // broadcasts, our own optimistic reorder). Svelte 5's `$state` wraps
+  // assigned arrays in a new proxy on every write, so comparing an old array
+  // reference to the current `tracks` by `===` does not reliably detect
+  // "nothing else changed it since" — a plain version counter does.
+  let tracksVersion = 0;
   let ws: ReturnType<typeof createSessionWebSocket> | null = null;
   let sessionId = '';
   const displayName = getDisplayName();
@@ -73,6 +80,9 @@
           } else {
             tracks[idx] = updated;
           }
+        } else if (typed.type === 'queue_reordered') {
+          tracks = typed.data.tracks as Track[];
+          tracksVersion++;
         }
       },
     });
@@ -80,6 +90,28 @@
 
   async function handleSubmitTrack(url: string) {
     return submitYoutubeUrl(sessionId, url);
+  }
+
+  async function handleReorder(orderedIds: string[]) {
+    const previousTracks = tracks;
+    const byId = new Map(tracks.map((t) => [t.id, t]));
+    const optimisticTracks = orderedIds.map((id) => byId.get(id)).filter((t): t is Track => t !== undefined);
+    tracks = optimisticTracks;
+    tracksVersion++;
+    const optimisticVersion = tracksVersion;
+    try {
+      await reorderTracks(sessionId, orderedIds);
+    } catch (err) {
+      // Only revert if nothing else (e.g. a queue_reordered broadcast from
+      // another member's concurrent reorder) has replaced `tracks` since we
+      // applied our optimistic update — otherwise we'd clobber a legitimate
+      // newer state with our stale snapshot.
+      if (tracksVersion === optimisticVersion) {
+        tracks = previousTracks;
+        tracksVersion++;
+      }
+      throw err;
+    }
   }
 
   onDestroy(() => {
@@ -126,9 +158,12 @@
     <button type="submit" class="btn btn-primary">Send</button>
   </form>
 
-  <YoutubeDownloadForm
+  <YoutubeDownloadForm onSubmit={handleSubmitTrack} />
+
+  <QueueList
     {tracks}
-    onSubmit={handleSubmitTrack}
+    participants={session.participants}
+    onReorder={handleReorder}
     onPlay={(t) => (nowPlaying = t)}
   />
 
