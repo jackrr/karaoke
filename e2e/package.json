@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "screenshots": "playwright test --config=playwright.screenshots.config.ts",
     "test:ui": "playwright test --ui",
     "test:debug": "playwright test --debug",
     "browsers": "playwright install chromium",
