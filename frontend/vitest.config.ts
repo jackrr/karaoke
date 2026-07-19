@@ -1,5 +1,6 @@
 import { defineConfig, configDefaults } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { svelteTesting } from "@testing-library/svelte/vite";
 
 export default defineConfig({
   plugins: [svelte()],
@@ -7,7 +8,7 @@ export default defineConfig({
     workspace: [
       {
         extends: true,
-        plugins: [svelte()],
+        plugins: [svelte(), svelteTesting()],
         test: {
           name: "components",
           include: ["src/**/?(*.)test.{svelte,html,md,vue,astro}"],
@@ -18,6 +19,7 @@ export default defineConfig({
       },
       {
         extends: true,
+        plugins: [svelteTesting()],
         test: {
           name: "utils",
           include: ["src/**/*.test.ts", "tests/**/*.test.{ts,js}"],

@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .database import close_db, get_db, start_db
+from .tracks import tracks_router
 from .websocket_manager import ws_router, manager
 
 
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Karaoke API", lifespan=lifespan)
 app.include_router(ws_router)
+app.include_router(tracks_router)
 
 
 async def _generate_unique_passcode(db) -> str:

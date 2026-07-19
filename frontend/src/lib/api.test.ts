@@ -5,6 +5,9 @@ import {
   getSession,
   joinSession,
   leaveSession,
+  submitYoutubeUrl,
+  listTracks,
+  DuplicateTrackError,
 } from "./api";
 import { __resetIdentityForTests, getClientId } from "./identity";
 
@@ -167,6 +170,132 @@ describe("api helpers", () => {
       );
       const result = await getSession("abc");
       expect(result).toEqual(sessionData);
+    });
+  });
+
+  describe("submitYoutubeUrl", () => {
+    it("posts url and client_id, returns the created track", async () => {
+      const track = {
+        id: "t1",
+        session_id: "abc",
+        source_url: "https://youtube.com/watch?v=xyz",
+        youtube_video_id: "xyz",
+        title: null,
+        status: "pending",
+        error_message: null,
+        audio_path: null,
+        lyrics_path: null,
+        lyrics_source: null,
+        duration_seconds: null,
+        requested_by_client_id: "client-1",
+        created_at: "now",
+        updated_at: "now",
+      };
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 202,
+          json: () => Promise.resolve(track),
+        }),
+      ) as any;
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await submitYoutubeUrl(
+        "abc",
+        "https://youtube.com/watch?v=xyz",
+      );
+
+      expect(result).toEqual(track);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/sessions/abc/tracks");
+      const body = JSON.parse(init.body);
+      expect(body.url).toBe("https://youtube.com/watch?v=xyz");
+      expect(typeof body.client_id).toBe("string");
+    });
+
+    it("throws DuplicateTrackError with the existing track on 409", async () => {
+      const existing = {
+        id: "t1",
+        session_id: "abc",
+        source_url: "https://youtube.com/watch?v=xyz",
+        youtube_video_id: "xyz",
+        title: "Existing",
+        status: "downloaded",
+        error_message: null,
+        audio_path: "/path",
+        lyrics_path: null,
+        lyrics_source: "none",
+        duration_seconds: 10,
+        requested_by_client_id: "client-1",
+        created_at: "now",
+        updated_at: "now",
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({
+            ok: false,
+            status: 409,
+            json: () => Promise.resolve(existing),
+          }),
+        ),
+      );
+
+      await expect(
+        submitYoutubeUrl("abc", "https://youtube.com/watch?v=xyz"),
+      ).rejects.toThrow(DuplicateTrackError);
+    });
+
+    it("throws a generic error on other failures", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve({ ok: false, status: 422 })),
+      );
+
+      await expect(submitYoutubeUrl("abc", "not-a-url")).rejects.toThrow();
+    });
+  });
+
+  describe("listTracks", () => {
+    it("returns tracks from fetch", async () => {
+      const tracks = [
+        {
+          id: "t1",
+          session_id: "abc",
+          source_url: "https://youtube.com/watch?v=xyz",
+          youtube_video_id: "xyz",
+          title: "A Song",
+          status: "downloaded",
+          error_message: null,
+          audio_path: "/path",
+          lyrics_path: null,
+          lyrics_source: "none",
+          duration_seconds: 10,
+          requested_by_client_id: "client-1",
+          created_at: "now",
+          updated_at: "now",
+        },
+      ];
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ tracks }),
+        }),
+      ) as any;
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await listTracks("abc");
+
+      expect(result).toEqual(tracks);
+      expect(fetchMock).toHaveBeenCalledWith("/sessions/abc/tracks");
+    });
+
+    it("throws when the request fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve({ ok: false, status: 500 })),
+      );
+      await expect(listTracks("abc")).rejects.toThrow();
     });
   });
 

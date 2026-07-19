@@ -83,6 +83,56 @@ export async function leaveSession(id: string) {
   }
 }
 
+export type TrackStatus =
+  "pending" | "downloading" | "fetching_lyrics" | "downloaded" | "error";
+
+export type Track = {
+  id: string;
+  session_id: string;
+  source_url: string;
+  youtube_video_id: string;
+  title: string | null;
+  status: TrackStatus;
+  error_message: string | null;
+  audio_path: string | null;
+  lyrics_path: string | null;
+  lyrics_source: string | null;
+  duration_seconds: number | null;
+  requested_by_client_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export class DuplicateTrackError extends Error {
+  track: Track;
+  constructor(track: Track) {
+    super("Track already added to this session");
+    this.name = "DuplicateTrackError";
+    this.track = track;
+  }
+}
+
+export async function submitYoutubeUrl(sessionId: string, url: string) {
+  const res = await fetch(`${API_BASE}sessions/${sessionId}/tracks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, client_id: getClientId() }),
+  });
+  if (res.status === 409) {
+    const track = await json<Track>(res);
+    throw new DuplicateTrackError(track);
+  }
+  if (!res.ok) throw new Error("Failed to submit YouTube URL");
+  return json<Track>(res);
+}
+
+export async function listTracks(sessionId: string) {
+  const res = await fetch(`${API_BASE}sessions/${sessionId}/tracks`);
+  if (!res.ok) throw new Error("Failed to list tracks");
+  const data = await json<{ tracks: Track[] }>(res);
+  return data.tracks;
+}
+
 // ---- WebSocket helpers ----
 
 export function createSessionWebSocket(
