@@ -2,9 +2,12 @@ import asyncio
 import json
 from pathlib import Path
 
+import numpy as np
+import soundfile as sf
 from httpx import AsyncClient
 
 import app.tracks as tracks_module
+from app import stems
 from app.database import get_db
 from tests.conftest import WsTestClient
 
@@ -71,6 +74,26 @@ def _fake_download_factory(*, with_captions: bool, fail: bool = False):
     return _fake_run_yt_dlp_sync
 
 
+def _fake_run_demucs_sync_factory(*, fail: bool = False):
+    """Build a fake `run_demucs_sync` replacement that writes canned stem
+    files instead of running real model inference."""
+
+    def _fake_run_demucs_sync(audio_path: Path, dest_dir: Path, model: str):
+        if fail:
+            raise RuntimeError("simulated failure")
+
+        stem_dir = dest_dir / model / audio_path.stem
+        stem_dir.mkdir(parents=True, exist_ok=True)
+        vocals_path = stem_dir / "vocals.wav"
+        no_vocals_path = stem_dir / "no_vocals.wav"
+        samples = np.array([[0.1, 0.1], [0.2, 0.2]], dtype=np.float32)
+        sf.write(str(vocals_path), samples, 44100, subtype="FLOAT")
+        sf.write(str(no_vocals_path), samples, 44100, subtype="FLOAT")
+        return stems.SeparationResult(vocals_path=vocals_path, no_vocals_path=no_vocals_path)
+
+    return _fake_run_demucs_sync
+
+
 async def test_post_invalid_url_returns_422(async_client: AsyncClient) -> None:
     session = await _create_session(async_client)
     resp = await async_client.post(
@@ -113,6 +136,7 @@ async def test_post_valid_url_downloads_successfully(async_client: AsyncClient, 
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=True)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
     session = await _create_session(async_client)
 
     resp = await async_client.post(
@@ -124,20 +148,22 @@ async def test_post_valid_url_downloads_successfully(async_client: AsyncClient, 
     assert created["status"] == "pending"
     assert created["youtube_video_id"] == "dQw4w9WgXcQ"
 
-    track = await _wait_for_status(async_client, session["id"], {"downloaded", "error"})
-    assert track["status"] == "downloaded"
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "ready"
     assert track["audio_path"]
+    assert track["audio_path"].endswith("mixed.wav")
     assert track["title"] == "Fake Title"
     assert track["lyrics_source"] == "captions"
     assert track["lyrics_path"]
 
 
-async def test_no_captions_reaches_downloaded_with_no_lyrics(
+async def test_no_captions_reaches_ready_with_no_lyrics(
     async_client: AsyncClient, monkeypatch
 ) -> None:
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
     session = await _create_session(async_client)
 
     resp = await async_client.post(
@@ -146,8 +172,9 @@ async def test_no_captions_reaches_downloaded_with_no_lyrics(
     )
     assert resp.status_code == 202
 
-    track = await _wait_for_status(async_client, session["id"], {"downloaded", "error"})
-    assert track["status"] == "downloaded"
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "ready"
+    assert track["audio_path"].endswith("mixed.wav")
     assert track["lyrics_source"] == "none"
     assert track["lyrics_path"] is None
 
@@ -156,6 +183,7 @@ async def test_duplicate_submission_returns_409(async_client: AsyncClient, monke
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
     session = await _create_session(async_client)
     await _join_session(async_client, session, "c2")
 
@@ -181,6 +209,7 @@ async def test_download_failure_marks_error_and_cleans_up_dir(
     monkeypatch.setattr(config.settings, "storage_dir", str(tmp_path))
     monkeypatch.setattr(tracks_module.settings, "storage_dir", str(tmp_path))
     monkeypatch.setattr(tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False, fail=True))
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
 
     session = await _create_session(async_client)
     resp = await async_client.post(
@@ -190,7 +219,37 @@ async def test_download_failure_marks_error_and_cleans_up_dir(
     assert resp.status_code == 202
     track_id = resp.json()["id"]
 
-    track = await _wait_for_status(async_client, session["id"], {"downloaded", "error"})
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "error"
+    assert track["error_message"]
+
+    dest_dir = tmp_path / "tracks" / track_id
+    assert not dest_dir.exists()
+
+
+async def test_stemming_failure_marks_error_and_cleans_up_dir(
+    async_client: AsyncClient, monkeypatch, tmp_path
+) -> None:
+    from app import config
+
+    monkeypatch.setattr(config.settings, "storage_dir", str(tmp_path))
+    monkeypatch.setattr(tracks_module.settings, "storage_dir", str(tmp_path))
+    monkeypatch.setattr(
+        tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
+    )
+    monkeypatch.setattr(
+        tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory(fail=True)
+    )
+
+    session = await _create_session(async_client)
+    resp = await async_client.post(
+        f"/sessions/{session['id']}/tracks",
+        json={"url": VALID_URL, "client_id": session["client_id"]},
+    )
+    assert resp.status_code == 202
+    track_id = resp.json()["id"]
+
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
     assert track["status"] == "error"
     assert track["error_message"]
 
@@ -207,6 +266,7 @@ def test_websocket_broadcasts_track_added_and_updated(client: WsTestClient, monk
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
 
     session_resp = client.post("/sessions", json={"name": "ws-tracks", "display_name": "Host"})
     assert session_resp.status_code == 201
@@ -235,8 +295,9 @@ def test_websocket_broadcasts_track_added_and_updated(client: WsTestClient, monk
             msg = json.loads(ws.receive_text())
             assert msg["type"] == "track_updated"
             seen_statuses.append(msg["data"]["status"])
-            if msg["data"]["status"] in ("downloaded", "error"):
+            if msg["data"]["status"] in ("ready", "error"):
                 break
 
         assert "downloading" in seen_statuses
-        assert seen_statuses[-1] == "downloaded"
+        assert "stemming" in seen_statuses
+        assert seen_statuses[-1] == "ready"

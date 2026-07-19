@@ -11,6 +11,9 @@ dependencies = [
     "httpx2>=0.3",
     "yt-dlp>=2024.10.0",
     "webvtt-py>=0.4.6",
+    "demucs>=4.0.1",
+    "soundfile>=0.12",
+    "numpy>=1.26",
 ]
 
 [dependency-groups]
