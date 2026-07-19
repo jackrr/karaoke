@@ -15,7 +15,9 @@
     pending: 'Pending',
     downloading: 'Downloading',
     fetching_lyrics: 'Fetching lyrics',
+    stemming: 'Removing vocals',
     downloaded: 'Downloaded',
+    ready: 'Ready',
     error: 'Error',
   };
 
@@ -139,6 +141,10 @@
   }
 
   .status-downloaded {
+    color: #16a34a;
+  }
+
+  .status-ready {
     color: #16a34a;
   }
 

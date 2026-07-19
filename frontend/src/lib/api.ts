@@ -84,7 +84,13 @@ export async function leaveSession(id: string) {
 }
 
 export type TrackStatus =
-  "pending" | "downloading" | "fetching_lyrics" | "downloaded" | "error";
+  | "pending"
+  | "downloading"
+  | "fetching_lyrics"
+  | "stemming"
+  | "downloaded"
+  | "ready"
+  | "error";
 
 export type Track = {
   id: string;

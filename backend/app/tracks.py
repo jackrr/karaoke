@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from .config import settings
 from .database import get_db
+from .stems import mix_with_attenuated_vocals, run_demucs_sync
 from .websocket_manager import _is_active_member, manager
 from .youtube import extract_video_id, run_yt_dlp_sync, vtt_to_lrc
 
@@ -228,18 +229,38 @@ async def process_track_download(
             lyrics_source = "none"
             lyrics_path_str = None
 
+        await _update_track(db, track_id, status="stemming")
+        await _broadcast_current()
+
+        separation = await asyncio.to_thread(
+            run_demucs_sync, result.audio_path, dest_dir, settings.demucs_model
+        )
+        mixed_path = dest_dir / "mixed.wav"
+        await asyncio.to_thread(
+            mix_with_attenuated_vocals,
+            separation.vocals_path,
+            separation.no_vocals_path,
+            mixed_path,
+            settings.vocal_volume_fraction,
+        )
+
         await _update_track(
             db,
             track_id,
-            status="downloaded",
-            audio_path=str(result.audio_path),
+            status="ready",
+            audio_path=str(mixed_path),
             title=result.title,
             duration_seconds=result.duration_seconds,
             lyrics_path=lyrics_path_str,
             lyrics_source=lyrics_source,
         )
         await _broadcast_current()
-    except Exception:
+    except (Exception, SystemExit):
+        # demucs.separate.main() calls sys.exit() on internal failures (e.g.
+        # model loading errors), which raises SystemExit — a BaseException,
+        # not caught by a bare `except Exception`. Catch it explicitly so
+        # those failures are reported as track errors instead of silently
+        # killing the background task and leaving the track stuck.
         await _update_track(
             db,
             track_id,
