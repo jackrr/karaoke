@@ -81,6 +81,8 @@ class DownloadResult:
     title: str
     duration_seconds: float | None
     vtt_path: Path | None
+    artist: str | None = None
+    album: str | None = None
 
 
 def run_yt_dlp_sync(url: str, dest_dir: Path) -> DownloadResult:
@@ -118,6 +120,8 @@ def run_yt_dlp_sync(url: str, dest_dir: Path) -> DownloadResult:
         title=info.get("title") or "Untitled",
         duration_seconds=info.get("duration"),
         vtt_path=vtt_path,
+        artist=info.get("artist"),
+        album=info.get("album"),
     )
 
 

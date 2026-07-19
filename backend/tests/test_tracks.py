@@ -14,6 +14,10 @@ from tests.conftest import WsTestClient
 VALID_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
+async def _fake_fetch_synced_lyrics_none(**kwargs):
+    return None
+
+
 async def _create_session(async_client: AsyncClient, name: str = "s") -> dict:
     resp = await async_client.post("/sessions", json={"name": name, "display_name": "Host"})
     assert resp.status_code == 201
@@ -164,6 +168,7 @@ async def test_no_captions_reaches_ready_with_no_lyrics(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
 
     resp = await async_client.post(
@@ -179,11 +184,42 @@ async def test_no_captions_reaches_ready_with_no_lyrics(
     assert track["lyrics_path"] is None
 
 
+async def test_no_captions_falls_back_to_lrclib(
+    async_client: AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
+    )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+
+    canned_lrc = "[00:01.00]Fallback lyrics"
+
+    async def _fake_fetch_synced_lyrics(**kwargs):
+        return canned_lrc
+
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics)
+    session = await _create_session(async_client)
+
+    resp = await async_client.post(
+        f"/sessions/{session['id']}/tracks",
+        json={"url": VALID_URL, "client_id": session["client_id"]},
+    )
+    assert resp.status_code == 202
+
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "ready"
+    assert track["audio_path"].endswith("mixed.wav")
+    assert track["lyrics_source"] == "lrclib"
+    assert track["lyrics_path"]
+    assert Path(track["lyrics_path"]).read_text() == canned_lrc
+
+
 async def test_duplicate_submission_returns_409(async_client: AsyncClient, monkeypatch) -> None:
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
     await _join_session(async_client, session, "c2")
 
@@ -240,6 +276,7 @@ async def test_stemming_failure_marks_error_and_cleans_up_dir(
     monkeypatch.setattr(
         tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory(fail=True)
     )
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
 
     session = await _create_session(async_client)
     resp = await async_client.post(
@@ -267,6 +304,7 @@ def test_websocket_broadcasts_track_added_and_updated(client: WsTestClient, monk
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
 
     session_resp = client.post("/sessions", json={"name": "ws-tracks", "display_name": "Host"})
     assert session_resp.status_code == 201
@@ -299,5 +337,6 @@ def test_websocket_broadcasts_track_added_and_updated(client: WsTestClient, monk
                 break
 
         assert "downloading" in seen_statuses
+        assert "fetching_lyrics" in seen_statuses
         assert "stemming" in seen_statuses
         assert seen_statuses[-1] == "ready"
