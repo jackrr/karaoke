@@ -64,7 +64,12 @@ describe("QueueList", () => {
     // prop from the parent (e.g. session/[id]/+page.svelte's onMessage
     // handler assigning `tracks = typed.data.tracks`).
     const broadcastTracks = [t3, t2, t1];
-    await rerender({ tracks: broadcastTracks, participants: [], onReorder, onPlay: vi.fn() });
+    await rerender({
+      tracks: broadcastTracks,
+      participants: [],
+      onReorder,
+      onPlay: vi.fn(),
+    });
 
     await waitFor(() => {
       const titles = screen
@@ -102,7 +107,12 @@ describe("QueueList", () => {
         requested_by_display_name: "Bob",
       }),
     ];
-    render(QueueList, { tracks, participants: [], onReorder: vi.fn(), onPlay: vi.fn() });
+    render(QueueList, {
+      tracks,
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+    });
 
     const titles = screen
       .getAllByText(/Song (One|Two)/)
@@ -140,7 +150,12 @@ describe("QueueList", () => {
         requested_by_client_id: "unresolvable-client-id",
       }),
     ];
-    render(QueueList, { tracks, participants: [], onReorder: vi.fn(), onPlay: vi.fn() });
+    render(QueueList, {
+      tracks,
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+    });
 
     expect(screen.getByText(/Added by unresolv/)).toBeTruthy();
   });
@@ -209,8 +224,16 @@ describe("QueueList", () => {
   });
 
   it("shows a Play button only for ready tracks and invokes onPlay when clicked", async () => {
-    const readyTrack = makeTrack({ id: "t1", title: "Song One", status: "ready" });
-    const pendingTrack = makeTrack({ id: "t2", title: "Song Two", status: "pending" });
+    const readyTrack = makeTrack({
+      id: "t1",
+      title: "Song One",
+      status: "ready",
+    });
+    const pendingTrack = makeTrack({
+      id: "t2",
+      title: "Song Two",
+      status: "pending",
+    });
     const onPlay = vi.fn();
     render(QueueList, {
       tracks: [readyTrack, pendingTrack],

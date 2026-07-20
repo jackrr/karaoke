@@ -5,7 +5,13 @@ from httpx import AsyncClient
 
 import app.tracks as tracks_module
 from tests.conftest import WsTestClient
-from tests.test_tracks import VALID_URL, _create_session, _join_session
+from tests.test_tracks import (
+    VALID_URL,
+    _create_session,
+    _fake_fetch_synced_lyrics_none,
+    _fake_run_demucs_sync_factory,
+    _join_session,
+)
 
 
 async def _add_track(async_client: AsyncClient, session: dict, client_id: str, url: str = VALID_URL) -> dict:
@@ -23,6 +29,8 @@ async def test_tracks_listed_in_position_order(async_client: AsyncClient, monkey
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
 
     urls = [
@@ -54,6 +62,8 @@ async def test_concurrent_track_creation_assigns_unique_sequential_positions(
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
 
     urls = [
@@ -85,6 +95,8 @@ async def test_requested_by_display_name_resolves_for_active_member(
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
     track = await _add_track(async_client, session, session["client_id"])
     assert track["requested_by_display_name"] == "Host"
@@ -102,6 +114,8 @@ async def test_requested_by_display_name_resolves_for_departed_member(
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
     guest = await _join_session(async_client, session, "guest-1", display_name="Guest One")
     await _add_track(async_client, session, "guest-1")
@@ -123,6 +137,8 @@ async def test_reorder_updates_position_and_persists(async_client: AsyncClient, 
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
 
     urls = [
@@ -153,6 +169,8 @@ async def test_reorder_rejects_non_active_member(async_client: AsyncClient, monk
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
     track = await _add_track(async_client, session, session["client_id"])
 
@@ -169,6 +187,8 @@ async def test_reorder_rejects_missing_track_id(async_client: AsyncClient, monke
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
     await _add_track(async_client, session, session["client_id"], "https://www.youtube.com/watch?v=aaaaaaaaaaa")
     await _add_track(async_client, session, session["client_id"], "https://www.youtube.com/watch?v=bbbbbbbbbbb")
@@ -189,6 +209,8 @@ async def test_reorder_rejects_extra_foreign_track_id(async_client: AsyncClient,
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
     track = await _add_track(async_client, session, session["client_id"])
 
@@ -205,6 +227,8 @@ async def test_reorder_rejects_duplicate_track_id(async_client: AsyncClient, mon
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
     track = await _add_track(async_client, session, session["client_id"])
 
@@ -229,6 +253,8 @@ def test_websocket_broadcasts_queue_reordered(client: WsTestClient, monkeypatch)
     monkeypatch.setattr(
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
     )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
 
     session_resp = client.post("/sessions", json={"name": "ws-order", "display_name": "Host"})
     assert session_resp.status_code == 201

@@ -43,12 +43,23 @@ test.afterEach(async ({ page }) => {
 
 test('drag-and-drop reorders the queue', async ({ page }) => {
   // svelte-dnd-action focuses the dragged clone element while a drag is in
-  // progress, which can trigger the browser to auto-scroll it into view.
-  // That shifts page layout under our fixed set of viewport-relative mouse
-  // coordinates mid-gesture and corrupts the drag. Neutralize
-  // scroll-into-view for the duration of the test.
+  // progress, and also auto-scrolls the drop zone's scroll container when
+  // the cursor nears its edge (SCROLL_ZONE_PX). Either can shift page
+  // layout under our fixed set of viewport-relative mouse coordinates
+  // mid-gesture and corrupt the drag — e.g. adding the per-row "Play"
+  // button was enough extra content to nudge the queue rows within the
+  // bottom-edge auto-scroll hot zone, which silently scrolled the page a
+  // few pixels and caused the drop to land back in the original slot.
+  // Neutralize scrolling for the duration of the test so our precomputed
+  // coordinates stay valid throughout the gesture.
   await page.addInitScript(() => {
     Element.prototype.scrollIntoView = () => {};
+    Element.prototype.scrollBy = () => {};
+    window.scrollBy = () => {};
+    const origFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (this: HTMLElement, opts?: FocusOptions) {
+      return origFocus.call(this, { ...(opts ?? {}), preventScroll: true });
+    };
   });
 
   await page.goto('/');
