@@ -86,12 +86,6 @@ test('drag-and-drop reorders the queue', async ({ page }) => {
   await expect(trackRows).toHaveCount(3);
   await expect(page.locator('.status-ready')).toHaveCount(3, { timeout: 10_000 });
 
-  // Recorded for the video/documentation purposes; the real correctness
-  // check below compares track ids from the API, since all seeded tracks
-  // share the same placeholder title.
-  const initialTitles = await page.locator('.track .title').allTextContents();
-  void initialTitles;
-
   const initialTracks = await fetchTracks(page, sessionId);
   const initialOrder = initialTracks.tracks.map((t) => t.id);
   expect(initialOrder).toEqual(created);
