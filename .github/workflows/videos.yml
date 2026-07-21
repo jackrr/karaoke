@@ -100,10 +100,24 @@ jobs:
           git add e2e/videos/*.gif
           if git diff --cached --quiet; then
             echo "No GIF preview changes to commit"
-          else
-            git commit -m "chore: update PR reorder video preview [skip ci]"
-            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+            exit 0
           fi
+          git commit -m "chore: update PR reorder video preview [skip ci]"
+          # The screenshots workflow runs concurrently on the same PR push
+          # and also commits+pushes to this branch, so a plain push can lose
+          # the race. Rebase onto whatever landed first and retry.
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:${{ github.event.pull_request.head.ref }}"; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Failed to push GIF preview after 5 attempts"
+              exit 1
+            fi
+            sleep $((attempt * 3))
+            git fetch origin "${{ github.event.pull_request.head.ref }}"
+            git rebase "origin/${{ github.event.pull_request.head.ref }}"
+          done
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
