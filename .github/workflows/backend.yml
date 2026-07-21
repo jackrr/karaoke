@@ -30,6 +30,8 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "backend/uv.lock"
 
       - name: Set up Python
         uses: actions/setup-python@v5
