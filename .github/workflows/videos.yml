@@ -68,26 +68,37 @@ jobs:
           name: pr-reorder-video
           path: e2e/videos/*.webm
 
-      # Commits the freshly captured video back onto the PR branch so it can
-      # be viewed inline (via raw.githubusercontent.com) instead of only as a
-      # downloadable CI artifact. Skipped for forked PRs, since the default
+      # GitHub's comment sanitizer strips <video src="..."> for any src
+      # outside its own private upload CDN, so a linked/embedded .webm never
+      # actually plays inline in a comment. Converting to a GIF sidesteps
+      # that: GitHub renders GIFs as plain <img> (like the screenshots
+      # workflow) and they autoplay, giving an inline preview without
+      # requiring a click-through download.
+      - name: Convert video to GIF preview
+        run: ffmpeg -i videos/reorder-dnd.webm -vf "fps=12,scale=640:-1:flags=lanczos" videos/reorder-dnd.gif
+
+      # Commits the freshly captured GIF preview back onto the PR branch so
+      # it can be viewed inline (via raw.githubusercontent.com) instead of
+      # only as a downloadable CI artifact. The full-quality .webm stays out
+      # of the branch (see .gitignore) and is only available via the
+      # uploaded artifact above. Skipped for forked PRs, since the default
       # GITHUB_TOKEN can't push to a fork's branch.
       #
       # Loop safety: this workflow only triggers on frontend/**, not on
       # e2e/videos/**, so this commit doesn't re-trigger itself. The commit
       # message also carries "[skip ci]" as a backstop, mirroring
       # screenshots.yml.
-      - name: Commit and push updated video
+      - name: Commit and push updated GIF preview
         if: github.event.pull_request.head.repo.full_name == github.repository
         working-directory: .
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add e2e/videos/*.webm
+          git add e2e/videos/*.gif
           if git diff --cached --quiet; then
-            echo "No video changes to commit"
+            echo "No GIF preview changes to commit"
           else
-            git commit -m "chore: update PR reorder video [skip ci]"
+            git commit -m "chore: update PR reorder video preview [skip ci]"
             git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
           fi
 
@@ -104,7 +115,7 @@ jobs:
             const isFork = context.payload.pull_request.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`;
             const files = fs
               .readdirSync("e2e/videos")
-              .filter((f) => f.endsWith(".webm"))
+              .filter((f) => f.endsWith(".gif"))
               .sort();
 
             let body;
@@ -113,10 +124,8 @@ jobs:
               body = `${marker}\n### Drag-and-drop queue reorder video\n\nCaptured for this PR, but not committed back (forked PR): [view run](${runUrl})\n\n${list}\n`;
             } else {
               const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${branch}/e2e/videos`;
-              const videos = files
-                .map((f) => `**${f}**\n\n<video src="${rawBase}/${f}" controls></video>`)
-                .join("\n\n");
-              body = `${marker}\n### Drag-and-drop queue reorder video\n\nUpdated for this PR: [view run](${runUrl})\n\n${videos}\n`;
+              const gifs = files.map((f) => `![${f}](${rawBase}/${f})`).join("\n\n");
+              body = `${marker}\n### Drag-and-drop queue reorder video\n\nUpdated for this PR (GIF preview, no audio/controls — download the \`pr-reorder-video\` artifact from [the run](${runUrl}) for the full-quality \`.webm\`):\n\n${gifs}\n`;
             }
 
             const { data: comments } = await github.rest.issues.listComments({
