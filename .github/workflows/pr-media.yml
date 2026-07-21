@@ -1,26 +1,28 @@
-name: Reorder Video
+name: PR Media
 
 on:
   pull_request:
     paths:
       - "frontend/**"
+      - "e2e/tests-screenshots/**"
       - "e2e/tests-videos/**"
+      - "e2e/playwright.screenshots.config.ts"
       - "e2e/playwright.videos.config.ts"
       - "backend/app/tracks.py"
       - "backend/app/config.py"
-      - ".github/workflows/videos.yml"
+      - ".github/workflows/pr-media.yml"
 
 permissions:
   contents: write
   pull-requests: write
 
 concurrency:
-  group: reorder-video-${{ github.event.pull_request.number }}
+  group: pr-media-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  reorder-video:
-    name: playwright reorder video
+  pr-media:
+    name: playwright screenshots + reorder video
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,9 +60,19 @@ jobs:
         run: bunx playwright install --with-deps chromium
         working-directory: ./e2e
 
+      - name: Run screenshot capture
+        run: bun run screenshots
+        working-directory: ./e2e
+
       - name: Run reorder video capture
         run: bun run videos
         working-directory: ./e2e
+
+      - name: Upload screenshots artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-screenshots
+          path: e2e/screenshots/*.png
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
@@ -71,53 +83,41 @@ jobs:
       # GitHub's comment sanitizer strips <video src="..."> for any src
       # outside its own private upload CDN, so a linked/embedded .webm never
       # actually plays inline in a comment. Converting to a GIF sidesteps
-      # that: GitHub renders GIFs as plain <img> (like the screenshots
-      # workflow) and they autoplay, giving an inline preview without
-      # requiring a click-through download.
+      # that: GitHub renders GIFs as plain <img> (like the screenshots) and
+      # they autoplay, giving an inline preview without a click-through
+      # download.
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Convert video to GIF preview
         run: ffmpeg -i videos/reorder-dnd.webm -vf "fps=12,scale=640:-1:flags=lanczos" videos/reorder-dnd.gif
 
-      # Commits the freshly captured GIF preview back onto the PR branch so
-      # it can be viewed inline (via raw.githubusercontent.com) instead of
-      # only as a downloadable CI artifact. The full-quality .webm stays out
-      # of the branch (see .gitignore) and is only available via the
-      # uploaded artifact above. Skipped for forked PRs, since the default
-      # GITHUB_TOKEN can't push to a fork's branch.
+      # Commits the freshly captured screenshots and GIF preview back onto
+      # the PR branch in a single commit so they can be viewed inline (via
+      # raw.githubusercontent.com) instead of only as downloadable CI
+      # artifacts. The full-quality .webm stays out of the branch (see
+      # .gitignore) and is only available via the uploaded artifact above.
+      # Skipped for forked PRs, since the default GITHUB_TOKEN can't push to
+      # a fork's branch.
       #
       # Loop safety: this workflow only triggers on frontend/**, not on
-      # e2e/videos/**, so this commit doesn't re-trigger itself. The commit
-      # message also carries "[skip ci]" as a backstop, mirroring
-      # screenshots.yml.
-      - name: Commit and push updated GIF preview
+      # e2e/screenshots/** or e2e/videos/**, so this commit doesn't
+      # re-trigger itself. The commit message also carries "[skip ci]" as a
+      # backstop, and this is the only workflow that commits PR media, so
+      # there's no cross-workflow push race to retry around.
+      - name: Commit and push updated media
         if: github.event.pull_request.head.repo.full_name == github.repository
         working-directory: .
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add e2e/videos/*.gif
+          git add e2e/screenshots/*.png e2e/videos/*.gif
           if git diff --cached --quiet; then
-            echo "No GIF preview changes to commit"
-            exit 0
+            echo "No media changes to commit"
+          else
+            git commit -m "chore: update PR screenshots and reorder video preview [skip ci]"
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
           fi
-          git commit -m "chore: update PR reorder video preview [skip ci]"
-          # The screenshots workflow runs concurrently on the same PR push
-          # and also commits+pushes to this branch, so a plain push can lose
-          # the race. Rebase onto whatever landed first and retry.
-          for attempt in 1 2 3 4 5; do
-            if git push origin "HEAD:${{ github.event.pull_request.head.ref }}"; then
-              break
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              echo "::error::Failed to push GIF preview after 5 attempts"
-              exit 1
-            fi
-            sleep $((attempt * 3))
-            git fetch origin "${{ github.event.pull_request.head.ref }}"
-            git rebase "origin/${{ github.event.pull_request.head.ref }}"
-          done
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
@@ -126,23 +126,34 @@ jobs:
         with:
           script: |
             const fs = require("fs");
-            const marker = "<!-- pr-reorder-video-bot -->";
+            const marker = "<!-- pr-media-bot -->";
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const branch = context.payload.pull_request.head.ref;
             const isFork = context.payload.pull_request.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`;
-            const files = fs
+
+            const screenshotFiles = fs
+              .readdirSync("e2e/screenshots")
+              .filter((f) => f.endsWith(".png"))
+              .sort();
+            const videoFiles = fs
               .readdirSync("e2e/videos")
               .filter((f) => f.endsWith(".gif"))
               .sort();
 
             let body;
             if (isFork) {
-              const list = files.map((f) => `- \`${f}\``).join("\n");
-              body = `${marker}\n### Drag-and-drop queue reorder video\n\nCaptured for this PR, but not committed back (forked PR): [view run](${runUrl})\n\n${list}\n`;
+              const list = [...screenshotFiles, ...videoFiles].map((f) => `- \`${f}\``).join("\n");
+              body = `${marker}\n### PR media\n\nCaptured for this PR, but not committed back (forked PR): [view run](${runUrl})\n\n${list}\n`;
             } else {
-              const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${branch}/e2e/videos`;
-              const gifs = files.map((f) => `![${f}](${rawBase}/${f})`).join("\n\n");
-              body = `${marker}\n### Drag-and-drop queue reorder video\n\nUpdated for this PR (GIF preview, no audio/controls — download the \`pr-reorder-video\` artifact from [the run](${runUrl}) for the full-quality \`.webm\`):\n\n${gifs}\n`;
+              const screenshotsRawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${branch}/e2e/screenshots`;
+              const videosRawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${branch}/e2e/videos`;
+              const images = screenshotFiles
+                .map((f) => `**${f}**\n\n![${f}](${screenshotsRawBase}/${f})`)
+                .join("\n\n");
+              const gifs = videoFiles.map((f) => `![${f}](${videosRawBase}/${f})`).join("\n\n");
+              body =
+                `${marker}\n### Screenshots\n\nUpdated for this PR: [view run](${runUrl})\n\n${images}\n\n` +
+                `### Drag-and-drop queue reorder video\n\nGIF preview, no audio/controls — download the \`pr-reorder-video\` artifact from the run for the full-quality \`.webm\`:\n\n${gifs}\n`;
             }
 
             const { data: comments } = await github.rest.issues.listComments({

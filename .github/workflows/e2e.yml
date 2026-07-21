@@ -5,6 +5,7 @@ on:
     paths:
       - "e2e/**"
       - "!e2e/screenshots/**"
+      - "!e2e/videos/**"
       - "frontend/**"
       - "backend/**"
       - ".github/workflows/e2e.yml"
@@ -13,6 +14,7 @@ on:
     paths:
       - "e2e/**"
       - "!e2e/screenshots/**"
+      - "!e2e/videos/**"
       - "frontend/**"
       - "backend/**"
       - ".github/workflows/e2e.yml"
