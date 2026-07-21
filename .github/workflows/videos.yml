@@ -74,6 +74,9 @@ jobs:
       # that: GitHub renders GIFs as plain <img> (like the screenshots
       # workflow) and they autoplay, giving an inline preview without
       # requiring a click-through download.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Convert video to GIF preview
         run: ffmpeg -i videos/reorder-dnd.webm -vf "fps=12,scale=640:-1:flags=lanczos" videos/reorder-dnd.gif
 
