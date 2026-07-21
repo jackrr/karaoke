@@ -36,11 +36,29 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "backend/uv.lock"
+          prune-cache: false
 
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.14
+
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend/bun.lock', 'e2e/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('e2e/bun.lock') }}
 
       - name: Install backend deps
         run: uv sync --group dev
@@ -56,6 +74,12 @@ jobs:
 
       - name: Install browser binaries
         run: bunx playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: ./e2e
+
+      - name: Install browser OS dependencies only
+        run: sudo env "PATH=$PATH" bunx playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
         working-directory: ./e2e
 
       - name: Run e2e tests
