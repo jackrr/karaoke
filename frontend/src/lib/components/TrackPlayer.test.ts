@@ -17,6 +17,8 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
     lyrics_source: "captions",
     duration_seconds: 42,
     requested_by_client_id: "c1",
+    requested_by_display_name: null,
+    position: 0,
     created_at: "now",
     updated_at: "now",
     ...overrides,

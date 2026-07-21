@@ -17,7 +17,7 @@ export async function createSessionViaApi(
   name = 'E2E Test Session'
 ): Promise<CreateSessionResult> {
   const resp = await page.evaluate(
-    (sessionName) =>
+    (sessionName: string) =>
       fetch('/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,6 +58,48 @@ export async function joinSessionViaUI(
 export async function navigateToSession(page: Page, sessionId: string): Promise<Page> {
   await page.goto(`/session/${sessionId}`);
   return page;
+}
+
+type CreateTrackResult = {
+  id: string;
+  status: string;
+  source_url: string;
+  youtube_video_id: string | null;
+};
+
+/**
+ * Create a track via direct API call (bypasses the YouTube URL form).
+ * `clientId` must belong to an active member of `sessionId` (e.g. the
+ * `client_id` returned by `createSessionViaApi`, or the browser's persisted
+ * `karaoke_client_id` localStorage value when the session was created via
+ * the UI — see `getClientId`).
+ */
+export async function createTrackViaApi(
+  page: Page,
+  sessionId: string,
+  url: string,
+  clientId: string
+): Promise<CreateTrackResult> {
+  const resp = await page.evaluate(
+    ({ sessionId, url, clientId }: { sessionId: string; url: string; clientId: string }) =>
+      fetch(`/sessions/${sessionId}/tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, client_id: clientId }),
+      }).then((r) => r.json()) as Promise<CreateTrackResult>,
+    { sessionId, url, clientId }
+  );
+  return resp;
+}
+
+/**
+ * Read the browser's persisted client id (set by the app in localStorage
+ * under `karaoke_client_id` — see frontend/src/lib/identity.ts).
+ */
+export async function getClientId(page: Page): Promise<string> {
+  const clientId = await page.evaluate(() => localStorage.getItem('karaoke_client_id'));
+  if (!clientId) throw new Error('karaoke_client_id not found in localStorage');
+  return clientId;
 }
 
 /**

@@ -65,6 +65,7 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
             lyrics_source TEXT,
             duration_seconds REAL,
             requested_by_client_id TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -80,6 +81,12 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
         CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_session_video
             ON tracks (session_id, youtube_video_id)
             WHERE status != 'error'
+        """
+    )
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_tracks_session_position
+        ON tracks (session_id, position)
         """
     )
     await conn.commit()

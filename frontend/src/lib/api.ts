@@ -105,6 +105,8 @@ export type Track = {
   lyrics_source: string | null;
   duration_seconds: number | null;
   requested_by_client_id: string;
+  requested_by_display_name: string | null;
+  position: number;
   created_at: string;
   updated_at: string;
 };
@@ -156,6 +158,17 @@ export async function fetchTrackLyrics(
     throw new LyricsNotAvailableError("No lyrics available");
   if (!res.ok) throw new Error("Failed to fetch lyrics");
   return res.text();
+}
+
+export async function reorderTracks(sessionId: string, trackIds: string[]) {
+  const res = await fetch(`${API_BASE}sessions/${sessionId}/tracks/order`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client_id: getClientId(), track_ids: trackIds }),
+  });
+  if (!res.ok) throw new Error("Failed to reorder tracks");
+  const data = await json<{ tracks: Track[] }>(res);
+  return data.tracks;
 }
 
 // ---- WebSocket helpers ----

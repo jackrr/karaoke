@@ -16,6 +16,9 @@
     "format": "prettier --write .",
     "check": "svelte-kit sync && svelte-check --tsconfig tsconfig.json && prettier --check ."
   },
+  "dependencies": {
+    "svelte-dnd-action": "^0.9.74"
+  },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.0",
     "@sveltejs/kit": "^2.0.0",
