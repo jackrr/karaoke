@@ -11,7 +11,7 @@ on:
       - ".github/workflows/videos.yml"
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 concurrency:
@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -66,15 +68,56 @@ jobs:
           name: pr-reorder-video
           path: e2e/videos/*.webm
 
+      # Commits the freshly captured video back onto the PR branch so it can
+      # be viewed inline (via raw.githubusercontent.com) instead of only as a
+      # downloadable CI artifact. Skipped for forked PRs, since the default
+      # GITHUB_TOKEN can't push to a fork's branch.
+      #
+      # Loop safety: this workflow only triggers on frontend/**, not on
+      # e2e/videos/**, so this commit doesn't re-trigger itself. The commit
+      # message also carries "[skip ci]" as a backstop, mirroring
+      # screenshots.yml.
+      - name: Commit and push updated video
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add e2e/videos/*.webm
+          if git diff --cached --quiet; then
+            echo "No video changes to commit"
+          else
+            git commit -m "chore: update PR reorder video [skip ci]"
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          fi
+
       - name: Comment on PR
         if: github.event_name == 'pull_request'
         continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require("fs");
             const marker = "<!-- pr-reorder-video-bot -->";
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const body = `${marker}\n### Drag-and-drop queue reorder video\n\nA new recording of the drag-and-drop queue reorder flow was captured for this PR: [view run](${runUrl})\n\nDownload the \`pr-reorder-video\` artifact from the run to watch \`reorder-dnd.webm\`.\n`;
+            const branch = context.payload.pull_request.head.ref;
+            const isFork = context.payload.pull_request.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`;
+            const files = fs
+              .readdirSync("e2e/videos")
+              .filter((f) => f.endsWith(".webm"))
+              .sort();
+
+            let body;
+            if (isFork) {
+              const list = files.map((f) => `- \`${f}\``).join("\n");
+              body = `${marker}\n### Drag-and-drop queue reorder video\n\nCaptured for this PR, but not committed back (forked PR): [view run](${runUrl})\n\n${list}\n`;
+            } else {
+              const rawBase = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${branch}/e2e/videos`;
+              const videos = files
+                .map((f) => `**${f}**\n\n<video src="${rawBase}/${f}" controls></video>`)
+                .join("\n\n");
+              body = `${marker}\n### Drag-and-drop queue reorder video\n\nUpdated for this PR: [view run](${runUrl})\n\n${videos}\n`;
+            }
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
