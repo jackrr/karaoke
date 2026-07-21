@@ -38,6 +38,7 @@ jobs:
           version: "latest"
           enable-cache: true
           cache-dependency-glob: "backend/uv.lock"
+          prune-cache: false
 
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
