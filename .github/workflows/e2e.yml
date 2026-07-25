@@ -22,6 +22,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  checks: write
 
 concurrency:
   group: e2e-${{ github.event.pull_request.number || github.ref }}
@@ -149,6 +150,7 @@ jobs:
       # re-trigger itself. The commit message also carries "[skip ci]" as a
       # backstop.
       - name: Commit and push updated media
+        id: commit_media
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         working-directory: .
         run: |
@@ -157,10 +159,80 @@ jobs:
           git add e2e/screenshots/*.png e2e/videos/*.gif
           if git diff --cached --quiet; then
             echo "No media changes to commit"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "chore: update PR screenshots and reorder video preview [skip ci]"
             git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            echo "new_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
+
+      # e2e/screenshots/** and e2e/videos/** are excluded from every
+      # workflow's trigger paths (so the commit above doesn't re-trigger
+      # CI), which means the new PR head SHA it creates never gets any
+      # check runs of its own. GitHub's required-status-checks rule then
+      # shows that SHA as permanently "Expected — waiting for status to be
+      # reported" and blocks merging, even though the only diff from the
+      # tested commit is generated screenshots/video. Mirror the required
+      # checks' conclusions from the tested SHA onto the new one so the PR
+      # reports green and stays mergeable.
+      - name: Mirror required status checks onto media commit
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.commit_media.outputs.pushed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const newSha = "${{ steps.commit_media.outputs.new_sha }}";
+            const oldSha = context.payload.pull_request.head.sha;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // "lint & type check" and "Run frontend checks" run in sibling
+            // workflows triggered by the same pull_request event; copy
+            // whatever conclusion they already reached for the tested SHA.
+            const mirroredChecks = ["Run frontend checks", "lint & type check"];
+            for (const name of mirroredChecks) {
+              const { data } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: oldSha,
+                check_name: name,
+              });
+              const run = data.check_runs.find((r) => r.status === "completed");
+              if (!run) {
+                core.warning(`No completed check run named "${name}" found for ${oldSha}; skipping mirror`);
+                continue;
+              }
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name,
+                head_sha: newSha,
+                status: "completed",
+                conclusion: run.conclusion,
+                details_url: run.html_url,
+                output: {
+                  title: name,
+                  summary: `Mirrored from ${oldSha} (${run.html_url}) — this commit only adds generated screenshots/video, no source changes.`,
+                },
+              });
+            }
+
+            // "playwright" is this job's own required check, still
+            // in-progress against oldSha at this point. Reaching this step
+            // means the "Run e2e tests" step above already succeeded, so
+            // report the same success for the new SHA directly.
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "playwright",
+              head_sha: newSha,
+              status: "completed",
+              conclusion: "success",
+              details_url: runUrl,
+              output: {
+                title: "playwright",
+                summary: `Mirrored from this run (tested against ${oldSha}) — this commit only adds generated screenshots/video, no source changes.`,
+              },
+            });
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
