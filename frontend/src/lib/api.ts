@@ -167,6 +167,17 @@ export async function reorderTracks(sessionId: string, trackIds: string[]) {
   return data.tracks;
 }
 
+export async function removeTrack(sessionId: string, trackId: string) {
+  const params = new URLSearchParams({ client_id: getClientId() });
+  const res = await fetch(
+    `${API_BASE}sessions/${sessionId}/tracks/${trackId}?${params}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new Error("Failed to remove track");
+  const data = await json<{ tracks: Track[] }>(res);
+  return data.tracks;
+}
+
 // ---- WebSocket helpers ----
 
 export function createSessionWebSocket(

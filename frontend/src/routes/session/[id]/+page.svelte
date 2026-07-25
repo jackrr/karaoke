@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, type Track } from '$lib/api';
+  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, removeTrack, type Track } from '$lib/api';
   import { getDisplayName } from '$lib/identity';
   import SessionCard from '$lib/components/SessionCard.svelte';
   import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
@@ -20,6 +20,7 @@
   let session = $state<SessionData | null>(null);
   let loading = $state(true);
   let connected = $state(false);
+  let sessionEnded = $state(false);
   let message = $state('');
   let messages = $state<Array<{ sender: string; text: string; type?: string }>>([]);
   let tracks = $state<Track[]>([]);
@@ -82,6 +83,18 @@
         } else if (typed.type === 'queue_reordered') {
           tracks = typed.data.tracks as Track[];
           tracksVersion++;
+        } else if (typed.type === 'track_removed') {
+          tracks = typed.data.tracks as Track[];
+          tracksVersion++;
+          if (nowPlaying && !tracks.some((t) => t.id === nowPlaying!.id)) {
+            nowPlaying = null;
+          }
+        } else if (typed.type === 'session_ended') {
+          // The server reaped this session (e.g. it sat idle past the TTL)
+          // out from under us. Show a clear message instead of leaving the
+          // UI looking connected to a session that no longer exists.
+          sessionEnded = true;
+          nowPlaying = null;
         }
       },
     });
@@ -113,6 +126,28 @@
     }
   }
 
+  async function handleRemove(track: Track) {
+    const previousTracks = tracks;
+    tracks = tracks.filter((t) => t.id !== track.id);
+    tracksVersion++;
+    const optimisticVersion = tracksVersion;
+    try {
+      await removeTrack(sessionId, track.id);
+      if (nowPlaying?.id === track.id) {
+        nowPlaying = null;
+      }
+    } catch (err) {
+      // Same version-guard as handleReorder's revert — don't clobber a newer
+      // broadcast-derived state (e.g. a track_removed event that already
+      // arrived) with our stale pre-removal snapshot.
+      if (tracksVersion === optimisticVersion) {
+        tracks = previousTracks;
+        tracksVersion++;
+      }
+      throw err;
+    }
+  }
+
   onDestroy(() => {
     ws?.close();
   });
@@ -132,6 +167,10 @@
 </script>
 
 {#if session}
+  {#if sessionEnded}
+    <p class="session-ended">This session has ended (it was idle too long). Start a new one from the home page.</p>
+  {/if}
+
   <SessionCard
     code={session.code}
     participants={session.participants}
@@ -162,6 +201,7 @@
     participants={session.participants}
     onReorder={handleReorder}
     onPlay={(t) => (nowPlaying = t)}
+    onRemove={handleRemove}
   />
 
   {#if nowPlaying}
@@ -176,6 +216,12 @@
 
 <style>
   .online { color: #666; }
+
+  .session-ended {
+    color: #d32f2f;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
 
   .connected { color: #16a34a; }
   .status:not(.connected) { color: #d32f2f; }

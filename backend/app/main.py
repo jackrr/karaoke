@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 import secrets
 import sqlite3
@@ -10,7 +12,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .database import close_db, get_db, start_db
+from .config import settings
+from .database import close_db, get_db, start_db, touch_session
+from .reaper import run_reaper_loop
 from .tracks import tracks_router
 from .websocket_manager import ws_router, manager
 
@@ -51,7 +55,15 @@ class SessionLeave(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     start_db()
+    reaper_task = asyncio.create_task(
+        run_reaper_loop(
+            settings.storage_dir, settings.session_ttl_seconds, settings.reaper_interval_seconds
+        )
+    )
     yield
+    reaper_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await reaper_task
     await close_db()
 
 
@@ -113,6 +125,8 @@ async def create_session(body: SessionCreate) -> SessionCreateResponse:
         raise RuntimeError("Failed to create session with a unique code")
 
     await _upsert_member(db, sid, host_client_id, body.display_name)
+    await touch_session(db, sid)
+    await db.commit()
     return SessionCreateResponse(
         id=sid,
         code=code,
@@ -147,6 +161,8 @@ async def join_session_by_code(body: SessionJoinByCode) -> SessionJoinResponse:
 
     client_id = body.client_id or str(uuid4())
     await _upsert_member(db, session_id, client_id, body.display_name)
+    await touch_session(db, session_id)
+    await db.commit()
 
     return SessionJoinResponse(
         id=session_id,
@@ -200,6 +216,7 @@ async def leave_session(session_id: str, body: SessionLeave) -> None:
         "WHERE session_id = ? AND client_id = ? AND left_at IS NULL",
         (session_id, body.client_id),
     )
+    await touch_session(db, session_id)
     await db.commit()
     await manager.broadcast_event(session_id, "member_left", {"client_id": body.client_id})
 

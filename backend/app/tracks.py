@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from .config import settings
-from .database import get_db
+from .database import get_db, touch_session
 from .lrclib import fetch_synced_lyrics
 from .stems import mix_with_attenuated_vocals, run_demucs_sync
 from .websocket_manager import _is_active_member, manager
@@ -112,6 +112,12 @@ async def _session_exists(db, session_id: str) -> bool:
     return row is not None
 
 
+async def _track_exists(db, track_id: str) -> bool:
+    async with db.execute("SELECT 1 FROM tracks WHERE id = ?", (track_id,)) as cursor:
+        row = await cursor.fetchone()
+    return row is not None
+
+
 @tracks_router.post("/sessions/{session_id}/tracks", status_code=202, response_model=None)
 async def create_track(
     session_id: str, body: TrackCreate, background_tasks: BackgroundTasks
@@ -142,6 +148,7 @@ async def create_track(
             "(SELECT COALESCE(MAX(position), -1) + 1 FROM tracks WHERE session_id = ?))",
             (track_id, session_id, body.url, video_id, body.client_id, session_id),
         )
+        await touch_session(db, session_id)
         await db.commit()
     except sqlite3.IntegrityError:
         async with db.execute(
@@ -256,6 +263,7 @@ async def reorder_tracks(session_id: str, body: TrackOrder) -> dict:
         "UPDATE tracks SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [(index, track_id) for index, track_id in enumerate(body.track_ids)],
     )
+    await touch_session(db, session_id)
     await db.commit()
 
     tracks = await _list_tracks_ordered(db, session_id)
@@ -263,13 +271,61 @@ async def reorder_tracks(session_id: str, body: TrackOrder) -> dict:
     return {"tracks": tracks}
 
 
-async def _update_track(db, track_id: str, **fields) -> None:
+@tracks_router.delete("/sessions/{session_id}/tracks/{track_id}")
+async def remove_track(session_id: str, track_id: str, client_id: str) -> dict:
+    db = await get_db()
+    if not await _session_exists(db, session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not await _is_active_member(session_id, client_id):
+        raise HTTPException(
+            status_code=403, detail="Not an active member of this session"
+        )
+
+    track = await _get_track(db, track_id)
+    if track is None or track["session_id"] != session_id:
+        raise HTTPException(status_code=404, detail="Track not found")
+
+    await db.execute("DELETE FROM tracks WHERE id = ?", (track_id,))
+    await touch_session(db, session_id)
+    await db.commit()
+
+    await asyncio.to_thread(
+        shutil.rmtree, Path(settings.storage_dir) / "tracks" / track_id, ignore_errors=True
+    )
+
+    tracks = await _list_tracks_ordered(db, session_id)
+    await manager.broadcast_event(
+        session_id, "track_removed", {"track_id": track_id, "tracks": tracks}
+    )
+    return {"tracks": tracks}
+
+
+async def _update_track(db, track_id: str, **fields) -> bool:
+    """Returns whether the track's row still existed (i.e. the UPDATE
+    affected a row). A False return means the track was removed — or its
+    session was reaped — since the pipeline last checked."""
     set_clause = ", ".join(f"{key} = ?" for key in fields)
-    await db.execute(
+    cursor = await db.execute(
         f"UPDATE tracks SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (*fields.values(), track_id),
     )
     await db.commit()
+    return cursor.rowcount > 0
+
+
+class _TrackGone(Exception):
+    """Internal sentinel: the track's DB row vanished (removed via DELETE,
+    or its session reaped) while the download pipeline was still running."""
+
+
+async def _update_track_or_abort(db, track_id: str, **fields) -> None:
+    """Like `_update_track`, but raises `_TrackGone` when the row is gone so
+    the pipeline stops doing further work — and the caller can clean up
+    whatever's been written to disk so far — instead of silently continuing
+    to write files nothing in the DB references anymore."""
+    if not await _update_track(db, track_id, **fields):
+        raise _TrackGone(track_id)
 
 
 async def process_track_download(
@@ -286,7 +342,7 @@ async def process_track_download(
     logger.info("track %s: starting processing pipeline for %s", track_id, url)
 
     try:
-        await _update_track(db, track_id, status="downloading")
+        await _update_track_or_abort(db, track_id, status="downloading")
         await _broadcast_current()
 
         if settings.skip_track_download:
@@ -297,7 +353,7 @@ async def process_track_download(
             dest_dir.mkdir(parents=True, exist_ok=True)
             audio_path = dest_dir / "audio.m4a"
             await asyncio.to_thread(audio_path.write_bytes, b"fake audio")
-            await _update_track(
+            await _update_track_or_abort(
                 db,
                 track_id,
                 status="ready",
@@ -325,7 +381,7 @@ async def process_track_download(
         )
 
         if result.vtt_path is not None:
-            await _update_track(db, track_id, status="fetching_lyrics")
+            await _update_track_or_abort(db, track_id, status="fetching_lyrics")
             await _broadcast_current()
             logger.info("track %s: converting bundled captions to lyrics", track_id)
             vtt_content = await asyncio.to_thread(result.vtt_path.read_text)
@@ -335,7 +391,7 @@ async def process_track_download(
             lyrics_source = "captions"
             lyrics_path_str: str | None = str(lyrics_path)
         else:
-            await _update_track(db, track_id, status="fetching_lyrics")
+            await _update_track_or_abort(db, track_id, status="fetching_lyrics")
             await _broadcast_current()
             logger.info("track %s: no captions, looking up synced lyrics via lrclib", track_id)
             lrc_content = await fetch_synced_lyrics(
@@ -354,7 +410,7 @@ async def process_track_download(
                 lyrics_path_str = None
         logger.info("track %s: lyrics stage done (source=%s)", track_id, lyrics_source)
 
-        await _update_track(db, track_id, status="stemming")
+        await _update_track_or_abort(db, track_id, status="stemming")
         await _broadcast_current()
 
         logger.info("track %s: running demucs source separation", track_id)
@@ -371,7 +427,7 @@ async def process_track_download(
             settings.vocal_volume_fraction,
         )
 
-        await _update_track(
+        await _update_track_or_abort(
             db,
             track_id,
             status="ready",
@@ -383,12 +439,43 @@ async def process_track_download(
         )
         await _broadcast_current()
         logger.info("track %s: pipeline complete, ready for playback", track_id)
+    except _TrackGone:
+        # The track was removed (or its session reaped) while this pipeline
+        # was still running. Nothing in the DB references dest_dir anymore,
+        # so whatever's been written there so far — partial or complete — is
+        # an orphan. Clean it up rather than leaking it forever.
+        logger.info(
+            "track %s: DB row vanished mid-pipeline (removed, or session reaped); "
+            "cleaning up orphaned storage directory",
+            track_id,
+        )
+        await asyncio.to_thread(shutil.rmtree, dest_dir, ignore_errors=True)
     except (Exception, SystemExit):
         # demucs.separate.main() calls sys.exit() on internal failures (e.g.
         # model loading errors), which raises SystemExit — a BaseException,
         # not caught by a bare `except Exception`. Catch it explicitly so
         # those failures are reported as track errors instead of silently
         # killing the background task and leaving the track stuck.
+        #
+        # This can also be reached by an I/O error (e.g. FileNotFoundError,
+        # or an OSError from writing into a now-deleted directory) that
+        # doesn't match the `_TrackGone` sentinel because it wasn't raised by
+        # `_update_track_or_abort` — e.g. `remove_track` or the reaper
+        # concurrently rmtree-ing dest_dir out from under a yt-dlp/demucs
+        # write happening in a background thread. That's the expected
+        # outcome of an intentional concurrent removal, not a genuine
+        # failure, so re-check whether the row is actually gone before
+        # treating this as one.
+        if not await _track_exists(db, track_id):
+            logger.info(
+                "track %s: DB row vanished mid-pipeline (removed, or session reaped) "
+                "and the pipeline hit an I/O error as a result; cleaning up orphaned "
+                "storage directory",
+                track_id,
+            )
+            await asyncio.to_thread(shutil.rmtree, dest_dir, ignore_errors=True)
+            return
+
         logger.exception("track %s: processing pipeline failed", track_id)
         await _update_track(
             db,

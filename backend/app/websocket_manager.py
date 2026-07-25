@@ -1,10 +1,12 @@
+import asyncio
+import contextlib
 import json
 from typing import Dict, Set
 
 import anyio
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
-from .database import get_db
+from .database import get_db, touch_session
 
 
 class ConnectionManager:
@@ -57,6 +59,25 @@ class ConnectionManager:
         session (e.g. another browser tab)."""
         return bool(self.active.get(session_id, {}).get(client_id))
 
+    async def close_session(self, session_id: str, event_type: str, data: dict) -> None:
+        """Broadcast a final event to every live connection on a session,
+        then close each of those sockets and drop the session from
+        bookkeeping.
+
+        Used when a session's rows are about to be deleted out from under
+        any straggler connections (e.g. by the reaper) so a still-connected
+        client is told why, and its socket is actually closed, instead of
+        being silently forgotten with a dangling connection.
+        """
+        await self.broadcast_event(session_id, event_type, data)
+        session_conns = self.active.pop(session_id, None)
+        if not session_conns:
+            return
+        for sockets in session_conns.values():
+            for ws in list(sockets):
+                with contextlib.suppress(Exception):
+                    await ws.close(code=status.WS_1000_NORMAL_CLOSURE)
+
 
 manager = ConnectionManager()
 
@@ -98,6 +119,23 @@ async def websocket_endpoint(
         return
 
     await manager.connect(session_id, client_id, websocket)
+
+    async def _touch_on_connect() -> None:
+        # Fired off rather than awaited inline: awaiting a DB write here,
+        # before the handshake's member_joined broadcast, has been observed
+        # to deadlock Starlette's TestClient under nested/concurrent
+        # websocket_connect() calls (each spins up its own anyio portal
+        # thread, and a synchronous aiosqlite round-trip across that
+        # multi-portal setup can wedge message delivery). Production runs a
+        # single real event loop where this isn't a concern, and a touch
+        # racing slightly behind connect is harmless — the reaper's periodic
+        # sweep-touch (see `reaper._touch_active_connections`) re-touches any
+        # actively-connected session on every sweep regardless.
+        touch_db = await get_db()
+        await touch_session(touch_db, session_id)
+        await touch_db.commit()
+
+    asyncio.create_task(_touch_on_connect())
     await manager.broadcast_event(session_id, "member_joined", {"client_id": client_id})
     try:
         while True:
