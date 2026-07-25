@@ -53,7 +53,7 @@ def _fake_download_factory(*, with_captions: bool, fail: bool = False):
     """Build a fake `run_yt_dlp_sync` replacement that writes canned files
     instead of touching the network."""
 
-    def _fake_run_yt_dlp_sync(url: str, dest_dir: Path):
+    def _fake_run_yt_dlp_sync(url: str, dest_dir: Path, cookies_file: str | None = None):
         from app.youtube import DownloadResult
 
         if fail:

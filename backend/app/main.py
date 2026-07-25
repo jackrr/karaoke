@@ -1,3 +1,4 @@
+import logging
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
@@ -12,6 +13,11 @@ from pydantic import BaseModel
 from .database import close_db, get_db, start_db
 from .tracks import tracks_router
 from .websocket_manager import ws_router, manager
+
+# Uvicorn only configures its own "uvicorn.*" loggers, not the root logger,
+# so our app-level loggers (e.g. app.tracks) would otherwise have no handler
+# and silently drop everything below WARNING.
+logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(message)s")
 
 
 class SessionCreate(BaseModel):
