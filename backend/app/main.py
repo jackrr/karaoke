@@ -21,34 +21,25 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(mess
 
 
 class SessionCreate(BaseModel):
-    name: str
     display_name: str
     client_id: str | None = None
 
 
 class SessionCreateResponse(BaseModel):
     id: str
-    name: str
-    passcode: str
+    code: str
     host_client_id: str
     client_id: str
 
 
-class SessionJoin(BaseModel):
-    passcode: str
-    display_name: str
-    client_id: str | None = None
-
-
-class SessionJoinByPasscode(BaseModel):
-    passcode: str
+class SessionJoinByCode(BaseModel):
+    code: str
     display_name: str
     client_id: str | None = None
 
 
 class SessionJoinResponse(BaseModel):
     id: str
-    name: str
     client_id: str
     is_host: bool
 
@@ -69,8 +60,8 @@ app.include_router(ws_router)
 app.include_router(tracks_router)
 
 
-async def _generate_unique_passcode(db) -> str:
-    """Generate a zero-padded 6-digit passcode unique across sessions.
+async def _generate_unique_code(db) -> str:
+    """Generate a zero-padded 6-digit code unique across sessions.
 
     Retries on collision — vanishingly unlikely with 1e6 possible codes, but
     the retry loop keeps the invariant enforced even under contention.
@@ -78,12 +69,12 @@ async def _generate_unique_passcode(db) -> str:
     for _ in range(50):
         candidate = f"{secrets.randbelow(1_000_000):06d}"
         async with db.execute(
-            "SELECT 1 FROM sessions WHERE passcode = ?", (candidate,)
+            "SELECT 1 FROM sessions WHERE code = ?", (candidate,)
         ) as cursor:
             row = await cursor.fetchone()
         if row is None:
             return candidate
-    raise RuntimeError("Failed to generate a unique passcode")
+    raise RuntimeError("Failed to generate a unique code")
 
 
 @app.get("/health")
@@ -94,9 +85,10 @@ async def health_check() -> dict[str, str]:
 @app.get("/sessions")
 async def list_sessions() -> dict:
     db = await get_db()
-    async with db.execute("SELECT id, name FROM sessions ORDER BY created_at DESC") as cursor:
-        rows = await cursor.fetchall()
-    return {"sessions": [{"id": row[0], "name": row[1]} for row in rows]}
+    async with db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        row = await cursor.fetchone()
+    assert row is not None
+    return {"count": row[0]}
 
 
 @app.post("/sessions", status_code=201)
@@ -106,25 +98,24 @@ async def create_session(body: SessionCreate) -> SessionCreateResponse:
     host_client_id = body.client_id or str(uuid4())
 
     for _ in range(10):
-        passcode = await _generate_unique_passcode(db)
+        code = await _generate_unique_code(db)
         try:
             await db.execute(
-                "INSERT INTO sessions (id, name, passcode, host_client_id) VALUES (?, ?, ?, ?)",
-                (sid, body.name, passcode, host_client_id),
+                "INSERT INTO sessions (id, code, host_client_id) VALUES (?, ?, ?)",
+                (sid, code, host_client_id),
             )
         except sqlite3.IntegrityError:
-            # Another concurrent create grabbed this passcode between our
+            # Another concurrent create grabbed this code between our
             # pre-check and this insert — regenerate and retry.
             continue
         break
     else:
-        raise RuntimeError("Failed to create session with a unique passcode")
+        raise RuntimeError("Failed to create session with a unique code")
 
     await _upsert_member(db, sid, host_client_id, body.display_name)
     return SessionCreateResponse(
         id=sid,
-        name=body.name,
-        passcode=passcode,
+        code=code,
         host_client_id=host_client_id,
         client_id=host_client_id,
     )
@@ -141,49 +132,24 @@ async def _upsert_member(db, session_id: str, client_id: str, display_name: str)
     await db.commit()
 
 
-@app.post("/sessions/{session_id}/join")
-async def join_session(session_id: str, body: SessionJoin) -> SessionJoinResponse:
-    db = await get_db()
-    async with db.execute(
-        "SELECT name, passcode, host_client_id FROM sessions WHERE id = ?", (session_id,)
-    ) as cursor:
-        row = await cursor.fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-    name, passcode, host_client_id = row
-    if body.passcode != passcode:
-        raise HTTPException(status_code=403, detail="Incorrect passcode")
-
-    client_id = body.client_id or str(uuid4())
-    await _upsert_member(db, session_id, client_id, body.display_name)
-
-    return SessionJoinResponse(
-        id=session_id,
-        name=name,
-        client_id=client_id,
-        is_host=client_id == host_client_id,
-    )
-
-
 @app.post("/sessions/join")
-async def join_session_by_passcode(body: SessionJoinByPasscode) -> SessionJoinResponse:
-    """Join a session by passcode alone, for the "I have a code" flow where the
+async def join_session_by_code(body: SessionJoinByCode) -> SessionJoinResponse:
+    """Join a session by code alone, for the "I have a code" flow where the
     client doesn't already know the session's id."""
     db = await get_db()
     async with db.execute(
-        "SELECT id, name, host_client_id FROM sessions WHERE passcode = ?", (body.passcode,)
+        "SELECT id, host_client_id FROM sessions WHERE code = ?", (body.code,)
     ) as cursor:
         row = await cursor.fetchone()
     if row is None:
-        raise HTTPException(status_code=404, detail="No session found for that passcode")
-    session_id, name, host_client_id = row
+        raise HTTPException(status_code=404, detail="No session found for that code")
+    session_id, host_client_id = row
 
     client_id = body.client_id or str(uuid4())
     await _upsert_member(db, session_id, client_id, body.display_name)
 
     return SessionJoinResponse(
         id=session_id,
-        name=name,
         client_id=client_id,
         is_host=client_id == host_client_id,
     )
@@ -193,13 +159,13 @@ async def join_session_by_passcode(body: SessionJoinByPasscode) -> SessionJoinRe
 async def get_session(session_id: str) -> dict:
     db = await get_db()
     async with db.execute(
-        "SELECT id, name, passcode, host_client_id, created_at FROM sessions WHERE id = ?",
+        "SELECT id, code, host_client_id, created_at FROM sessions WHERE id = ?",
         (session_id,),
     ) as cursor:
         row = await cursor.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    sid, name, passcode, host_client_id, created_at = row
+    sid, code, host_client_id, created_at = row
 
     async with db.execute(
         "SELECT client_id, display_name FROM session_members "
@@ -218,8 +184,7 @@ async def get_session(session_id: str) -> dict:
 
     return {
         "id": sid,
-        "name": name,
-        "passcode": passcode,
+        "code": code,
         "host_client_id": host_client_id,
         "created_at": created_at,
         "online": len(manager.active.get(session_id, {})),

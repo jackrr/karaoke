@@ -7,39 +7,35 @@ from app.main import _upsert_member
 from app.database import get_db
 
 
-async def _create_session(
-    async_client: AsyncClient, name: str = "s", display_name: str = "Host"
-) -> dict:
-    resp = await async_client.post("/sessions", json={"name": name, "display_name": display_name})
+async def _create_session(async_client: AsyncClient, display_name: str = "Host") -> dict:
+    resp = await async_client.post("/sessions", json={"display_name": display_name})
     assert resp.status_code == 201
     return resp.json()
 
 
-async def test_passcode_is_six_digits(async_client: AsyncClient) -> None:
+async def test_code_is_six_digits(async_client: AsyncClient) -> None:
     data = await _create_session(async_client)
-    assert re.fullmatch(r"\d{6}", data["passcode"])
+    assert re.fullmatch(r"\d{6}", data["code"])
 
 
-async def test_passcode_unique_retries_on_collision(
-    async_client: AsyncClient, monkeypatch
-) -> None:
+async def test_code_unique_retries_on_collision(async_client: AsyncClient, monkeypatch) -> None:
     """A collision on the second session's first attempt should trigger a retry."""
     values = iter([5, 5, 6])
     monkeypatch.setattr(main_module.secrets, "randbelow", lambda _n: next(values))
 
-    first = await _create_session(async_client, name="s1")
-    second = await _create_session(async_client, name="s2")
+    first = await _create_session(async_client, display_name="Host1")
+    second = await _create_session(async_client, display_name="Host2")
 
-    assert first["passcode"] == "000005"
-    assert second["passcode"] == "000006"
+    assert first["code"] == "000005"
+    assert second["code"] == "000006"
 
 
-async def test_join_with_correct_passcode_succeeds(async_client: AsyncClient) -> None:
+async def test_join_by_code_succeeds(async_client: AsyncClient) -> None:
     created = await _create_session(async_client)
 
     resp = await async_client.post(
-        f"/sessions/{created['id']}/join",
-        json={"passcode": created["passcode"], "display_name": "Guest"},
+        "/sessions/join",
+        json={"code": created["code"], "display_name": "Guest"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -49,42 +45,21 @@ async def test_join_with_correct_passcode_succeeds(async_client: AsyncClient) ->
     assert data["client_id"] != created["host_client_id"]
 
 
-async def test_join_with_wrong_passcode_fails(async_client: AsyncClient) -> None:
+async def test_join_by_wrong_code_fails(async_client: AsyncClient) -> None:
     created = await _create_session(async_client)
 
+    wrong_code = "000000" if created["code"] != "000000" else "111111"
     resp = await async_client.post(
-        f"/sessions/{created['id']}/join",
-        json={"passcode": "000000" if created["passcode"] != "000000" else "111111",
-              "display_name": "Guest"},
-    )
-    assert resp.status_code == 403
-
-
-async def test_join_unknown_session_404(async_client: AsyncClient) -> None:
-    resp = await async_client.post(
-        "/sessions/nonexistent-id/join",
-        json={"passcode": "123456", "display_name": "Guest"},
+        "/sessions/join",
+        json={"code": wrong_code, "display_name": "Guest"},
     )
     assert resp.status_code == 404
 
 
-async def test_join_by_passcode_succeeds(async_client: AsyncClient) -> None:
-    created = await _create_session(async_client)
-
+async def test_join_by_unknown_code_404(async_client: AsyncClient) -> None:
     resp = await async_client.post(
         "/sessions/join",
-        json={"passcode": created["passcode"], "display_name": "Guest"},
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["id"] == created["id"]
-    assert data["is_host"] is False
-
-
-async def test_join_by_unknown_passcode_404(async_client: AsyncClient) -> None:
-    resp = await async_client.post(
-        "/sessions/join",
-        json={"passcode": "000000", "display_name": "Guest"},
+        json={"code": "000000", "display_name": "Guest"},
     )
     assert resp.status_code == 404
 
@@ -95,7 +70,7 @@ async def test_get_session_shows_participants_including_host(async_client: Async
     resp = await async_client.get(f"/sessions/{created['id']}")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["passcode"] == created["passcode"]
+    assert data["code"] == created["code"]
     assert data["host_client_id"] == created["host_client_id"]
     assert data["participants"] == [
         {
@@ -109,8 +84,8 @@ async def test_get_session_shows_participants_including_host(async_client: Async
 async def test_get_session_includes_joined_guest(async_client: AsyncClient) -> None:
     created = await _create_session(async_client)
     join_resp = await async_client.post(
-        f"/sessions/{created['id']}/join",
-        json={"passcode": created["passcode"], "display_name": "Guest"},
+        "/sessions/join",
+        json={"code": created["code"], "display_name": "Guest"},
     )
     guest_client_id = join_resp.json()["client_id"]
 
@@ -126,8 +101,8 @@ async def test_get_session_includes_joined_guest(async_client: AsyncClient) -> N
 async def test_leave_marks_member_gone(async_client: AsyncClient) -> None:
     created = await _create_session(async_client)
     join_resp = await async_client.post(
-        f"/sessions/{created['id']}/join",
-        json={"passcode": created["passcode"], "display_name": "Guest"},
+        "/sessions/join",
+        json={"code": created["code"], "display_name": "Guest"},
     )
     guest_client_id = join_resp.json()["client_id"]
 
@@ -151,7 +126,6 @@ async def test_create_session_with_client_supplied_client_id(async_client: Async
     resp = await async_client.post(
         "/sessions",
         json={
-            "name": "s",
             "display_name": "Host",
             "client_id": "already-persisted-client-id",
         },
@@ -168,35 +142,33 @@ async def test_create_session_without_client_id_mints_one(async_client: AsyncCli
     assert data["client_id"] == data["host_client_id"]
 
 
-async def test_passcode_collision_on_insert_retries(
-    async_client: AsyncClient, monkeypatch
-) -> None:
+async def test_code_collision_on_insert_retries(async_client: AsyncClient, monkeypatch) -> None:
     """Even if the pre-check SELECT misses a race (two concurrent creates),
     a collision surfacing as an IntegrityError on the INSERT itself should
-    trigger a retry with a freshly generated passcode, not an unhandled 500."""
-    await _create_session(async_client, name="existing")
+    trigger a retry with a freshly generated code, not an unhandled 500."""
+    existing = await _create_session(async_client, display_name="Existing Host")
     db = await get_db()
-    async with db.execute("SELECT passcode FROM sessions WHERE name = 'existing'") as cursor:
+    async with db.execute(
+        "SELECT code FROM sessions WHERE id = ?", (existing["id"],)
+    ) as cursor:
         row = await cursor.fetchone()
     assert row is not None
-    (taken_passcode,) = row
+    (taken_code,) = row
 
-    # Force the passcode pre-check to always report "unique" so the only
+    # Force the code pre-check to always report "unique" so the only
     # thing preventing a collision is the INSERT's UNIQUE constraint —
     # simulating a race the pre-check missed.
     call_count = {"n": 0}
 
-    async def fake_generate_unique_passcode(_db):
+    async def fake_generate_unique_code(_db):
         call_count["n"] += 1
-        return taken_passcode if call_count["n"] == 1 else "999999"
+        return taken_code if call_count["n"] == 1 else "999999"
 
-    monkeypatch.setattr(main_module, "_generate_unique_passcode", fake_generate_unique_passcode)
+    monkeypatch.setattr(main_module, "_generate_unique_code", fake_generate_unique_code)
 
-    resp = await async_client.post(
-        "/sessions", json={"name": "new-session", "display_name": "Host"}
-    )
+    resp = await async_client.post("/sessions", json={"display_name": "Host"})
     assert resp.status_code == 201
-    assert resp.json()["passcode"] == "999999"
+    assert resp.json()["code"] == "999999"
     assert call_count["n"] == 2
 
 
@@ -224,17 +196,17 @@ async def test_upsert_member_twice_does_not_duplicate(async_client: AsyncClient)
 async def test_rejoin_after_leave_clears_left_at(async_client: AsyncClient) -> None:
     created = await _create_session(async_client)
     join_resp = await async_client.post(
-        f"/sessions/{created['id']}/join",
-        json={"passcode": created["passcode"], "display_name": "Guest"},
+        "/sessions/join",
+        json={"code": created["code"], "display_name": "Guest"},
     )
     guest_client_id = join_resp.json()["client_id"]
 
     await async_client.post(f"/sessions/{created['id']}/leave", json={"client_id": guest_client_id})
 
     rejoin_resp = await async_client.post(
-        f"/sessions/{created['id']}/join",
+        "/sessions/join",
         json={
-            "passcode": created["passcode"],
+            "code": created["code"],
             "display_name": "Guest Again",
             "client_id": guest_client_id,
         },

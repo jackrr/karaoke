@@ -7,16 +7,16 @@ from tests.conftest import WsTestClient
 from app.websocket_manager import manager
 
 
-def _create_session(client: WsTestClient, name: str) -> dict:
-    resp = client.post("/sessions", json={"name": name, "display_name": "Host"})
+def _create_session(client: WsTestClient) -> dict:
+    resp = client.post("/sessions", json={"display_name": "Host"})
     assert resp.status_code == 201
     return resp.json()
 
 
-def _join_session(client: WsTestClient, session_id: str, passcode: str, display_name: str) -> str:
+def _join_session(client: WsTestClient, code: str, display_name: str) -> str:
     resp = client.post(
-        f"/sessions/{session_id}/join",
-        json={"passcode": passcode, "display_name": display_name},
+        "/sessions/join",
+        json={"code": code, "display_name": display_name},
     )
     assert resp.status_code == 200
     return resp.json()["client_id"]
@@ -39,7 +39,7 @@ def _next_chat_message(ws) -> str:
 
 
 def test_websocket_connects(client: WsTestClient) -> None:
-    session = _create_session(client, "test-session")
+    session = _create_session(client)
     session_id, client_id = session["id"], session["client_id"]
 
     with client.websocket_connect(f"/ws/{session_id}?client_id={client_id}") as ws:
@@ -49,9 +49,9 @@ def test_websocket_connects(client: WsTestClient) -> None:
 
 
 def test_websocket_broadcast(client: WsTestClient) -> None:
-    session = _create_session(client, "shared-session")
+    session = _create_session(client)
     session_id, client1 = session["id"], session["client_id"]
-    client2 = _join_session(client, session_id, session["passcode"], "Guest")
+    client2 = _join_session(client, session["code"], "Guest")
 
     with client.websocket_connect(f"/ws/{session_id}?client_id={client1}") as ws1:
         with client.websocket_connect(f"/ws/{session_id}?client_id={client2}") as ws2:
@@ -64,7 +64,7 @@ def test_websocket_broadcast(client: WsTestClient) -> None:
 
 
 def test_websocket_discards_on_disconnect(client: WsTestClient) -> None:
-    session = _create_session(client, "disconnect-test")
+    session = _create_session(client)
     session_id, client_id = session["id"], session["client_id"]
 
     with client.websocket_connect(f"/ws/{session_id}?client_id={client_id}"):
@@ -81,7 +81,7 @@ def test_two_connections_same_client_id_both_stay_live(client: WsTestClient) -> 
     """Two tabs sharing the same persisted client_id should both remain
     connected — the second connecting must not silently evict the first,
     and each should be independently disconnectable."""
-    session = _create_session(client, "multi-tab-session")
+    session = _create_session(client)
     session_id, client_id = session["id"], session["client_id"]
 
     with client.websocket_connect(f"/ws/{session_id}?client_id={client_id}") as ws1:
@@ -114,7 +114,7 @@ def test_two_connections_same_client_id_both_stay_live(client: WsTestClient) -> 
 
 
 def test_websocket_rejects_non_member(client: WsTestClient) -> None:
-    session = _create_session(client, "reject-session")
+    session = _create_session(client)
     session_id = session["id"]
 
     with pytest.raises(WebSocketDisconnect):
@@ -123,7 +123,7 @@ def test_websocket_rejects_non_member(client: WsTestClient) -> None:
 
 
 def test_websocket_requires_client_id_query_param(client: WsTestClient) -> None:
-    session = _create_session(client, "missing-client-id")
+    session = _create_session(client)
     session_id = session["id"]
 
     with pytest.raises(WebSocketDisconnect):
@@ -134,9 +134,9 @@ def test_websocket_requires_client_id_query_param(client: WsTestClient) -> None:
 def test_websocket_disconnect_marks_member_left_in_db(client: WsTestClient) -> None:
     """A dropped websocket (no explicit /leave call) should still mark the
     member as left in the DB, so a subsequent GET no longer lists them."""
-    session = _create_session(client, "disconnect-db-session")
+    session = _create_session(client)
     session_id, host_id = session["id"], session["client_id"]
-    guest_id = _join_session(client, session_id, session["passcode"], "Guest")
+    guest_id = _join_session(client, session["code"], "Guest")
 
     with client.websocket_connect(f"/ws/{session_id}?client_id={guest_id}"):
         resp = client.get(f"/sessions/{session_id}")
@@ -151,9 +151,9 @@ def test_websocket_disconnect_marks_member_left_in_db(client: WsTestClient) -> N
 
 
 def test_websocket_broadcasts_member_joined_and_left(client: WsTestClient) -> None:
-    session = _create_session(client, "events-session")
+    session = _create_session(client)
     session_id, host_id = session["id"], session["client_id"]
-    guest_id = _join_session(client, session_id, session["passcode"], "Guest1")
+    guest_id = _join_session(client, session["code"], "Guest1")
 
     with client.websocket_connect(f"/ws/{session_id}?client_id={host_id}") as host_ws:
         # drain the host's own member_joined event

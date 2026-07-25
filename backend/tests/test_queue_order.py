@@ -256,14 +256,14 @@ def test_websocket_broadcasts_queue_reordered(client: WsTestClient, monkeypatch)
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
     monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
 
-    session_resp = client.post("/sessions", json={"name": "ws-order", "display_name": "Host"})
+    session_resp = client.post("/sessions", json={"display_name": "Host"})
     assert session_resp.status_code == 201
     session = session_resp.json()
     session_id, client_id = session["id"], session["client_id"]
 
     join_resp = client.post(
-        f"/sessions/{session_id}/join",
-        json={"passcode": session["passcode"], "display_name": "Guest", "client_id": "guest-1"},
+        "/sessions/join",
+        json={"code": session["code"], "display_name": "Guest", "client_id": "guest-1"},
     )
     assert join_resp.status_code == 200
 

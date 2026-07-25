@@ -11,8 +11,8 @@ from app import stems
 VALID_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
-async def _create_session(async_client: AsyncClient, name: str = "s") -> dict:
-    resp = await async_client.post("/sessions", json={"name": name, "display_name": "Host"})
+async def _create_session(async_client: AsyncClient) -> dict:
+    resp = await async_client.post("/sessions", json={"display_name": "Host"})
     assert resp.status_code == 201
     return resp.json()
 
@@ -137,7 +137,7 @@ async def test_audio_stream_404_when_track_belongs_to_different_session(
     async_client: AsyncClient, monkeypatch
 ) -> None:
     _, track = await _create_ready_track(async_client, monkeypatch)
-    other_session = await _create_session(async_client, name="other")
+    other_session = await _create_session(async_client)
     resp = await async_client.get(
         f"/sessions/{other_session['id']}/tracks/{track['id']}/audio"
     )

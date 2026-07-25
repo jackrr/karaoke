@@ -2,18 +2,23 @@
   import '../../app.css';
   import { joinSession } from '$lib/api';
   import { getDisplayName, setDisplayName } from '$lib/identity';
-  import { formatPasscode } from '$lib/utils/string';
+  import { formatCode } from '$lib/utils/string';
   import { goto } from '$app/navigation';
 
-  let passcode = $state('');
+  let code = $state('');
   let displayName = $state(getDisplayName());
   let loading = $state(false);
   let error = $state<string | null>(null);
 
+  function handleCodeInput(e: Event) {
+    // Strip anything pasted or typed that isn't a digit (spaces, dashes,
+    // etc.) so the join code is always clean regardless of how it arrived.
+    code = (e.currentTarget as HTMLInputElement).value.replace(/\D/g, '').slice(0, 6);
+  }
+
   async function handleJoin() {
-    const digits = passcode.replace(/\D/g, '');
-    if (digits.length !== 6) {
-      error = 'Enter the 6-digit passcode';
+    if (code.length !== 6) {
+      error = 'Enter the 6-digit session code';
       return;
     }
     if (!displayName.trim()) {
@@ -24,11 +29,11 @@
     error = null;
     try {
       const trimmedName = displayName.trim();
-      const result = await joinSession(digits, trimmedName);
+      const result = await joinSession(code, trimmedName);
       setDisplayName(trimmedName);
       await goto(`/session/${result.id}`);
     } catch {
-      error = 'Failed to join session — check the passcode and try again';
+      error = 'Failed to join session — check the session code and try again';
     } finally {
       loading = false;
     }
@@ -37,7 +42,7 @@
 
 <div class="hero">
   <h1>Join a session</h1>
-  <p class="subtitle">Enter the 6-digit passcode to join</p>
+  <p class="subtitle">Enter the 6-digit session code to join</p>
 </div>
 
 {#if error}
@@ -46,14 +51,14 @@
 
 <form class="join-form" onsubmit={(e) => { e.preventDefault(); handleJoin(); }}>
   <input
-    class="passcode-input"
-    bind:value={passcode}
+    class="code-input"
+    value={code}
+    oninput={handleCodeInput}
     placeholder="123456"
     inputmode="numeric"
-    maxlength="6"
-    aria-label="Passcode"
+    aria-label="Session code"
   />
-  <p class="passcode-preview">{formatPasscode(passcode.replace(/\D/g, ''))}</p>
+  <p class="code-preview">{formatCode(code)}</p>
   <input
     class="display-name-input"
     bind:value={displayName}
@@ -91,7 +96,7 @@
     margin: 0 auto;
   }
 
-  .passcode-input,
+  .code-input,
   .display-name-input {
     padding: 0.6rem 0.75rem;
     border: 1px solid #ccc;
@@ -99,7 +104,7 @@
     font-size: 1rem;
   }
 
-  .passcode-preview {
+  .code-preview {
     text-align: center;
     font-family: ui-monospace, monospace;
     color: #666;

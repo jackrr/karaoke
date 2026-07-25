@@ -1,20 +1,14 @@
 <script lang="ts">
-  import { capitalize, formatPasscode } from '$lib';
+  import { formatCode } from '$lib';
 
-  export let title: string = '';
-  export let passcode: string = '';
-  export let host: string = '';
+  export let code: string = '';
   export let queued: number = 0;
   export let participants: Array<{ client_id: string; display_name: string; is_host: boolean }> =
     [];
 </script>
 
 <article class="session-card">
-  <h2>{capitalize(title)}</h2>
-  <p>Passcode: <code>{formatPasscode(passcode)}</code></p>
-  {#if host}
-    <p class="host">Host: <kbd>{host}</kbd></p>
-  {/if}
+  <h2>{formatCode(code)}</h2>
   <div class="stats">
     <span class="badge">{queued} track{queued === 1 ? '' : 's'} queued</span>
   </div>
@@ -39,22 +33,6 @@
   .session-card h2 {
     margin: 0 0 0.5rem;
     font-size: 1.1rem;
-  }
-
-  .session-card p {
-    margin: 0.25rem 0;
-  }
-
-  code {
-    font-family: ui-monospace, monospace;
-    background: #f0f0f0;
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
-  }
-
-  .host {
-    color: #666;
-    font-size: 0.9rem;
   }
 
   .stats {
