@@ -1,34 +1,41 @@
 <script lang="ts">
   import '../app.css';
   import { createSession, listSessions } from '$lib/api';
-  import { getDisplayName } from '$lib/identity';
-  import { capitalize } from '$lib/utils/string';
+  import { getDisplayName, setDisplayName } from '$lib/identity';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
 
   let loading = $state(false);
   let error = $state<string | null>(null);
-  let sessions = $state<{ id: string; name: string }[]>([]);
-  let sessionName = $state('');
+  let sessionCount = $state<number | null>(null);
+  let displayName = $state(getDisplayName());
 
   onMount(async () => {
+    const redirectError = page.url.searchParams.get('error');
+    if (redirectError) {
+      error = redirectError;
+      await goto('/', { replaceState: true });
+    }
     try {
       const data = await listSessions();
-      sessions = data.sessions;
+      sessionCount = data.count;
     } catch {
-      error = 'Failed to load sessions';
+      error = error ?? 'Failed to load sessions';
     }
   });
 
   async function handleCreateSession() {
-    if (!sessionName.trim()) {
-      error = 'Enter a session name';
+    if (!displayName.trim()) {
+      error = 'Enter a display name';
       return;
     }
     loading = true;
     error = null;
     try {
-      const result = await createSession(sessionName.trim(), getDisplayName());
+      const trimmedName = displayName.trim();
+      const result = await createSession(trimmedName);
+      setDisplayName(trimmedName);
       await goto(`/session/${result.id}`);
     } catch {
       error = 'Failed to create session';
@@ -47,34 +54,25 @@
   <p class="error">{error}</p>
 {/if}
 
-{#if loading}
-  <p class="loading">Loading sessions...</p>
+{#if sessionCount !== null}
+  <p class="session-count">
+    There {sessionCount === 1 ? 'is' : 'are'} currently {sessionCount} active session{sessionCount === 1 ? '' : 's'}.
+  </p>
 {/if}
 
 <form class="create-form" onsubmit={(e) => { e.preventDefault(); handleCreateSession(); }}>
   <input
-    class="session-name-input"
-    bind:value={sessionName}
-    placeholder="Session name"
-    aria-label="Session name"
+    class="display-name-input"
+    bind:value={displayName}
+    placeholder="Your name"
+    aria-label="Display name"
   />
-  <button type="submit" class="btn btn-primary">Create Session</button>
+  <button type="submit" class="btn btn-primary" disabled={loading}>
+    {loading ? 'Creating...' : 'Create Session'}
+  </button>
 </form>
 
-<p class="join-link"><a href="/join">Have a passcode? Join a session</a></p>
-
-{#if sessions.length}
-  <div class="session-list">
-    {#each sessions as s}
-      <button
-        class="btn btn-secondary"
-        onclick={() => goto(`/session/${s.id}`)}
-      >
-        {capitalize(s.name)}
-      </button>
-    {/each}
-  </div>
-{/if}
+<p class="join-link">Have a code? <a href="/join">Join a session</a> — ask the host for their 6-digit session code.</p>
 
 <style>
   .hero {
@@ -107,11 +105,6 @@
     color: #fff;
   }
 
-  .btn-secondary {
-    background: #e2e2e2;
-    color: #1a1a1a;
-  }
-
   .btn:hover {
     opacity: 0.85;
   }
@@ -121,15 +114,10 @@
     margin: 1rem;
   }
 
-  .loading {
+  .session-count {
+    text-align: center;
+    color: #666;
     margin: 1rem;
-  }
-
-  .session-list {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    padding: 2rem;
   }
 
   .create-form {
@@ -139,7 +127,7 @@
     align-items: center;
   }
 
-  .session-name-input {
+  .display-name-input {
     padding: 0.6rem 0.75rem;
     border: 1px solid #ccc;
     border-radius: 6px;

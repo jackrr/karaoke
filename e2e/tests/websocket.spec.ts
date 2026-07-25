@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { createSessionViaUI, joinSessionViaUI, waitForWebSocketConnected, leaveSession } from './helpers';
 
 /**
- * Create a session in `hostPage` via the UI and return its id and passcode.
+ * Create a session in `hostPage` via the UI and return its id and code.
  *
  * Sessions must be created (and joined) through the real UI flow so the
  * browser's own persisted client id is registered as a session member —
@@ -10,16 +10,15 @@ import { createSessionViaUI, joinSessionViaUI, waitForWebSocketConnected, leaveS
  * active members, so a session created out-of-band (e.g. a bare API call)
  * would never be able to connect from a real browser.
  */
-async function createSessionAndGetPasscode(
-  hostPage: Page,
-  name: string
-): Promise<{ sessionId: string; passcode: string }> {
+async function createSessionAndGetCode(
+  hostPage: Page
+): Promise<{ sessionId: string; code: string }> {
   await hostPage.goto('/');
-  await createSessionViaUI(hostPage, name);
+  await createSessionViaUI(hostPage);
   const sessionId = new URL(hostPage.url()).pathname.replace('/session/', '');
-  const passcodeText = await hostPage.locator('.session-card code').innerText();
-  const passcode = passcodeText.replace(/\D/g, '');
-  return { sessionId, passcode };
+  const codeText = await hostPage.locator('.session-card h2').innerText();
+  const code = codeText.replace(/\D/g, '');
+  return { sessionId, code };
 }
 
 test('chat message broadcasts to other clients in the same session', async ({ browser }) => {
@@ -28,10 +27,10 @@ test('chat message broadcasts to other clients in the same session', async ({ br
   const page1 = await ctx1.newPage();
   const page2 = await ctx2.newPage();
 
-  const { passcode } = await createSessionAndGetPasscode(page1, 'Broadcast Session');
+  const { code } = await createSessionAndGetCode(page1);
 
   await page2.goto('/join');
-  await joinSessionViaUI(page2, passcode, 'Guest');
+  await joinSessionViaUI(page2, code, 'Guest');
 
   await Promise.all([waitForWebSocketConnected(page1), waitForWebSocketConnected(page2)]);
 
@@ -53,8 +52,8 @@ test('sessions are isolated — messages do not leak across sessions', async ({ 
   const pageA = await ctxA.newPage();
   const pageB = await ctxB.newPage();
 
-  await createSessionAndGetPasscode(pageA, 'Session A');
-  await createSessionAndGetPasscode(pageB, 'Session B');
+  await createSessionAndGetCode(pageA);
+  await createSessionAndGetCode(pageB);
 
   await Promise.all([waitForWebSocketConnected(pageA), waitForWebSocketConnected(pageB)]);
 
@@ -75,10 +74,10 @@ test('online count drops after a client leaves the session', async ({ browser, r
   const page1 = await ctx1.newPage();
   const page2 = await ctx2.newPage();
 
-  const { sessionId, passcode } = await createSessionAndGetPasscode(page1, 'Leave Session');
+  const { sessionId, code } = await createSessionAndGetCode(page1);
 
   await page2.goto('/join');
-  await joinSessionViaUI(page2, passcode, 'Guest');
+  await joinSessionViaUI(page2, code, 'Guest');
 
   await Promise.all([waitForWebSocketConnected(page1), waitForWebSocketConnected(page2)]);
 

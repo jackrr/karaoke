@@ -25,8 +25,7 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            passcode TEXT NOT NULL UNIQUE,
+            code TEXT NOT NULL UNIQUE,
             host_client_id TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )

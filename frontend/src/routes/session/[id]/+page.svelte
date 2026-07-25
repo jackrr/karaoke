@@ -11,9 +11,8 @@
   type Participant = { client_id: string; display_name: string; is_host: boolean };
   type SessionData = {
     id: string;
-    name: string;
+    code: string;
     online: number;
-    passcode: string;
     host_client_id: string;
     participants: Participant[];
   };
@@ -44,7 +43,7 @@
     sessionId = new URL(window.location.href).pathname.replace('/session/', '');
     const data = await getSession(sessionId);
     if (!data) {
-      loading = false;
+      await goto(`/?error=${encodeURIComponent("That session doesn't exist — check the code and try again.")}`);
       return;
     }
     session = data;
@@ -134,9 +133,7 @@
 
 {#if session}
   <SessionCard
-    title={session.name}
-    passcode={session.passcode}
-    host={session.participants.find((p) => p.is_host)?.display_name ?? ''}
+    code={session.code}
     participants={session.participants}
   />
   <p class="online">{session.online} online</p>

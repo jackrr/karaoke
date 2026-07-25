@@ -14,34 +14,32 @@ async def test_health_check(async_client: AsyncClient) -> None:
 async def test_list_sessions_empty(async_client: AsyncClient) -> None:
     resp = await async_client.get("/sessions")
     assert resp.status_code == 200
-    assert resp.json()["sessions"] == []
+    assert resp.json()["count"] == 0
 
 
 async def test_create_session(async_client: AsyncClient) -> None:
     resp = await async_client.post(
-        "/sessions", json={"name": "test-session", "display_name": "Host"}
+        "/sessions", json={"display_name": "Host"}
     )
     assert resp.status_code == 201
     data = resp.json()
-    assert data["name"] == "test-session"
     assert "id" in data
-    assert re.fullmatch(r"\d{6}", data["passcode"])
+    assert re.fullmatch(r"\d{6}", data["code"])
     assert data["host_client_id"]
     assert data["client_id"] == data["host_client_id"]
 
-    # verify it appears in the list
+    # verify the count reflects the new session
     resp2 = await async_client.get("/sessions")
     assert resp2.status_code == 200
-    names = [s["name"] for s in resp2.json()["sessions"]]
-    assert "test-session" in names
+    assert resp2.json()["count"] == 1
 
 
-async def test_list_sessions_does_not_leak_passcode(async_client: AsyncClient) -> None:
-    await async_client.post("/sessions", json={"name": "secret-session", "display_name": "Host"})
+async def test_list_sessions_returns_count_not_details(async_client: AsyncClient) -> None:
+    await async_client.post("/sessions", json={"display_name": "Host"})
     resp = await async_client.get("/sessions")
     assert resp.status_code == 200
-    for session in resp.json()["sessions"]:
-        assert "passcode" not in session
+    body = resp.json()
+    assert body == {"count": 1}
 
 
 async def test_create_session_clears_manager() -> None:

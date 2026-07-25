@@ -24,28 +24,28 @@ describe("api helpers", () => {
   });
 
   describe("listSessions", () => {
-    it("returns sessions from fetch", async () => {
+    it("returns the session count from fetch", async () => {
       const fetchMock = vi.fn(() =>
         Promise.resolve({
           ok: true,
-          json: vi.fn(() => Promise.resolve({ sessions: [] })),
+          json: vi.fn(() => Promise.resolve({ count: 0 })),
         }),
       ) as any;
       vi.stubGlobal("fetch", fetchMock);
-      await listSessions();
+      const result = await listSessions();
       expect(fetchMock).toHaveBeenCalledWith("/sessions");
+      expect(result).toEqual({ count: 0 });
     });
   });
 
   describe("createSession", () => {
-    it("posts name and display_name, returns session details", async () => {
+    it("posts display_name, returns session details", async () => {
       const res = {
         ok: true,
         json: vi.fn(() =>
           Promise.resolve({
             id: "abc",
-            name: "test",
-            passcode: "123456",
+            code: "123456",
             host_client_id: "host-1",
             client_id: "host-1",
           }),
@@ -54,18 +54,16 @@ describe("api helpers", () => {
       const fetchMock = vi.fn(() => Promise.resolve(res)) as any;
       vi.stubGlobal("fetch", fetchMock);
 
-      const result = await createSession("test", "Alice");
+      const result = await createSession("Alice");
 
       expect(result).toEqual({
         id: "abc",
-        name: "test",
-        passcode: "123456",
+        code: "123456",
         host_client_id: "host-1",
         client_id: "host-1",
       });
       const [, init] = fetchMock.mock.calls[0];
       const body = JSON.parse(init.body);
-      expect(body.name).toBe("test");
       expect(body.display_name).toBe("Alice");
       expect(typeof body.client_id).toBe("string");
       expect(body.client_id.length).toBeGreaterThan(0);
@@ -77,8 +75,7 @@ describe("api helpers", () => {
         json: vi.fn(() =>
           Promise.resolve({
             id: "abc",
-            name: "test",
-            passcode: "123456",
+            code: "123456",
             host_client_id: "existing-client",
             client_id: "existing-client",
           }),
@@ -88,7 +85,7 @@ describe("api helpers", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       const existingId = getClientId();
-      await createSession("test", "Alice");
+      await createSession("Alice");
 
       const [, init] = fetchMock.mock.calls[0];
       const body = JSON.parse(init.body);
@@ -97,13 +94,12 @@ describe("api helpers", () => {
   });
 
   describe("joinSession", () => {
-    it("posts passcode, display_name, and client_id", async () => {
+    it("posts code, display_name, and client_id", async () => {
       const res = {
         ok: true,
         json: vi.fn(() =>
           Promise.resolve({
             id: "abc",
-            name: "test",
             client_id: "guest-1",
             is_host: false,
           }),
@@ -116,14 +112,13 @@ describe("api helpers", () => {
 
       expect(result).toEqual({
         id: "abc",
-        name: "test",
         client_id: "guest-1",
         is_host: false,
       });
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toBe("/sessions/join");
       const body = JSON.parse(init.body);
-      expect(body.passcode).toBe("123456");
+      expect(body.code).toBe("123456");
       expect(body.display_name).toBe("Bob");
       expect(typeof body.client_id).toBe("string");
     });
@@ -150,10 +145,9 @@ describe("api helpers", () => {
     it("returns session data including participants", async () => {
       const sessionData = {
         id: "abc",
-        name: "test",
+        code: "123456",
         created_at: "now",
         online: 1,
-        passcode: "123456",
         host_client_id: "host-1",
         participants: [
           { client_id: "host-1", display_name: "Alice", is_host: true },

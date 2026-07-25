@@ -25,7 +25,7 @@ for (const viewport of VIEWPORTS) {
 
     test(`session page as host — ${viewport.name}`, async ({ page }) => {
       await page.goto('/');
-      await createSessionViaUI(page, 'Screenshot Session');
+      await createSessionViaUI(page);
       await waitForWebSocketConnected(page);
       await page.screenshot({ path: `screenshots/03-session-host-${viewport.name}.png` });
     });

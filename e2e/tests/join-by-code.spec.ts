@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createSessionViaUI, joinSessionViaUI, waitForWebSocketConnected } from './helpers';
 
-test('joining by passcode adds a second participant and shows real display names in chat', async ({
+test('joining by session code adds a second participant and shows real display names in chat', async ({
   browser,
 }) => {
   const ctxA = await browser.newContext();
@@ -11,17 +11,17 @@ test('joining by passcode adds a second participant and shows real display names
 
   // Context A creates the session via the UI.
   await pageA.goto('/');
-  await createSessionViaUI(pageA, 'Join Flow Session');
+  await createSessionViaUI(pageA);
   await waitForWebSocketConnected(pageA);
 
-  // Read the passcode straight from the rendered SessionCard.
-  const passcodeText = await pageA.locator('.session-card code').innerText();
-  const passcode = passcodeText.replace(/\D/g, '');
-  expect(passcode).toMatch(/^\d{6}$/);
+  // Read the code straight from the rendered SessionCard header.
+  const codeText = await pageA.locator('.session-card h2').innerText();
+  const code = codeText.replace(/\D/g, '');
+  expect(code).toMatch(/^\d{6}$/);
 
-  // Context B joins using only the passcode from the UI.
+  // Context B joins using only the code from the UI.
   await pageB.goto('/join');
-  await joinSessionViaUI(pageB, passcode, 'Bob');
+  await joinSessionViaUI(pageB, code, 'Bob');
   await waitForWebSocketConnected(pageB);
 
   // Both contexts should now see 2 participants.

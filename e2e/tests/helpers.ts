@@ -2,51 +2,46 @@ import { type Page } from '@playwright/test';
 
 /**
  * Create a session via direct API call (bypasses UI).
- * Returns the session created data (including id and passcode).
+ * Returns the session created data (including id and code).
  */
 type CreateSessionResult = {
   id: string;
-  name: string;
-  passcode: string;
+  code: string;
   host_client_id: string;
   client_id: string;
 };
 
-export async function createSessionViaApi(
-  page: Page,
-  name = 'E2E Test Session'
-): Promise<CreateSessionResult> {
+export async function createSessionViaApi(page: Page): Promise<CreateSessionResult> {
   const resp = await page.evaluate(
-    (sessionName: string) =>
+    () =>
       fetch('/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: sessionName, display_name: 'Host' }),
-      }).then((r) => r.json()) as Promise<CreateSessionResult>,
-    name
+        body: JSON.stringify({ display_name: 'Host' }),
+      }).then((r) => r.json()) as Promise<CreateSessionResult>
   );
   return resp;
 }
 
 /**
- * Create a session via UI: fill in the session name field and click Create.
+ * Create a session via UI: click Create (no session name to fill in — the
+ * server generates the session's display/join code).
  */
-export async function createSessionViaUI(page: Page, name = 'My Session'): Promise<void> {
-  await page.getByPlaceholder('Session name').fill(name);
+export async function createSessionViaUI(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Create/i }).click();
   // Wait for navigation to session page
   await page.waitForURL(/\/session\//);
 }
 
 /**
- * Join a session via the passcode UI. Assumes the browser is already on `/join`.
+ * Join a session via the session-code UI. Assumes the browser is already on `/join`.
  */
 export async function joinSessionViaUI(
   page: Page,
-  passcode: string,
+  code: string,
   displayName = 'Guest'
 ): Promise<void> {
-  await page.getByLabel('Passcode').fill(passcode);
+  await page.getByLabel('Session code').fill(code);
   await page.getByLabel('Display name').fill(displayName);
   await page.getByRole('button', { name: /Join Session/i }).click();
   await page.waitForURL(/\/session\//);

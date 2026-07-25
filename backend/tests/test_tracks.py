@@ -18,8 +18,8 @@ async def _fake_fetch_synced_lyrics_none(**kwargs):
     return None
 
 
-async def _create_session(async_client: AsyncClient, name: str = "s") -> dict:
-    resp = await async_client.post("/sessions", json={"name": name, "display_name": "Host"})
+async def _create_session(async_client: AsyncClient) -> dict:
+    resp = await async_client.post("/sessions", json={"display_name": "Host"})
     assert resp.status_code == 201
     return resp.json()
 
@@ -28,8 +28,8 @@ async def _join_session(
     async_client: AsyncClient, session: dict, client_id: str, display_name: str = "Guest"
 ) -> dict:
     resp = await async_client.post(
-        f"/sessions/{session['id']}/join",
-        json={"passcode": session["passcode"], "display_name": display_name, "client_id": client_id},
+        "/sessions/join",
+        json={"code": session["code"], "display_name": display_name, "client_id": client_id},
     )
     assert resp.status_code == 200
     return resp.json()
@@ -340,7 +340,7 @@ def test_websocket_broadcasts_track_added_and_updated(client: WsTestClient, monk
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
     monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
 
-    session_resp = client.post("/sessions", json={"name": "ws-tracks", "display_name": "Host"})
+    session_resp = client.post("/sessions", json={"display_name": "Host"})
     assert session_resp.status_code == 201
     session = session_resp.json()
     session_id, client_id = session["id"], session["client_id"]

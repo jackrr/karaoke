@@ -63,7 +63,7 @@ test('drag-and-drop reorders the queue', async ({ page }) => {
   });
 
   await page.goto('/');
-  await createSessionViaUI(page, 'Reorder Video Demo');
+  await createSessionViaUI(page);
   await waitForWebSocketConnected(page);
 
   const match = page.url().match(/\/session\/([^/?#]+)/);

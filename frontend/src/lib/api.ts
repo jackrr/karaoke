@@ -11,15 +11,14 @@ async function json<T>(res: Response): Promise<T> {
 export async function listSessions() {
   const res = await fetch(`${API_BASE}sessions`);
   if (!res.ok) throw new Error("Failed to list sessions");
-  return json<{ sessions: Array<{ id: string; name: string }> }>(res);
+  return json<{ count: number }>(res);
 }
 
-export async function createSession(name: string, displayName: string) {
+export async function createSession(displayName: string) {
   const res = await fetch(`${API_BASE}sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      name,
       display_name: displayName,
       client_id: getClientId(),
     }),
@@ -27,19 +26,18 @@ export async function createSession(name: string, displayName: string) {
   if (!res.ok) throw new Error("Failed to create session");
   return json<{
     id: string;
-    name: string;
-    passcode: string;
+    code: string;
     host_client_id: string;
     client_id: string;
   }>(res);
 }
 
-export async function joinSession(passcode: string, displayName: string) {
+export async function joinSession(code: string, displayName: string) {
   const res = await fetch(`${API_BASE}sessions/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      passcode,
+      code,
       display_name: displayName,
       client_id: getClientId(),
     }),
@@ -47,7 +45,6 @@ export async function joinSession(passcode: string, displayName: string) {
   if (!res.ok) throw new Error("Failed to join session");
   return json<{
     id: string;
-    name: string;
     client_id: string;
     is_host: boolean;
   }>(res);
@@ -59,10 +56,9 @@ export async function getSession(id: string) {
   if (!res.ok) throw new Error("Failed to get session");
   return json<{
     id: string;
-    name: string;
+    code: string;
     created_at: string;
     online: number;
-    passcode: string;
     host_client_id: string;
     participants: Array<{
       client_id: string;
