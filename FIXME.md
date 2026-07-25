@@ -1,10 +1,5 @@
 # FIXME
 
-## Bugs
-
-- the youtube download gives this error. (truncated for brevity):
-> ERROR: [youtube] wwHrEhOLIJ0: Please sign in. Use --cookies-from-browser or --cookies...
-
 ## Unimplemented features
 
 - Verify whether remove + reorder are implemented. If not, please add.
@@ -17,5 +12,4 @@
 
 ## Tech stuff
 
-- Backend server should log more progress through the track processing pipeline
 - How does state "clean up" for sessions? Do we have anything that cleans up all track data when a session is "over"?

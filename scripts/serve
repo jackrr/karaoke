@@ -8,4 +8,4 @@ bun run build
 
 cd ../backend
 uv sync
-uv run fastapi dev app/main.py --port 8765
+uv run fastapi dev app/main.py --port 8765 --reload-dir app

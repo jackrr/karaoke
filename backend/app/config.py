@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     vocal_volume_fraction: float = 0.20
     demucs_model: str = "htdemucs"
+    youtube_cookies_file: str | None = None
 
     model_config = {"env_file": ".env"}
 

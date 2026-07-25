@@ -35,7 +35,7 @@ def _fake_download_factory(*, with_captions: bool):
     """Build a fake `run_yt_dlp_sync` replacement that writes canned files
     instead of touching the network."""
 
-    def _fake_run_yt_dlp_sync(url: str, dest_dir: Path):
+    def _fake_run_yt_dlp_sync(url: str, dest_dir: Path, cookies_file: str | None = None):
         from app.youtube import DownloadResult
 
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -147,7 +147,7 @@ async def test_audio_stream_404_when_track_belongs_to_different_session(
 async def test_audio_stream_409_when_track_not_ready_yet(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    def _hang_briefly(url: str, dest_dir: Path):
+    def _hang_briefly(url: str, dest_dir: Path, cookies_file: str | None = None):
         import time
 
         time.sleep(1)
@@ -208,7 +208,7 @@ async def test_lyrics_endpoint_404_when_no_lyrics(
 async def test_lyrics_endpoint_409_when_track_not_ready_yet(
     async_client: AsyncClient, monkeypatch
 ) -> None:
-    def _hang_briefly(url: str, dest_dir: Path):
+    def _hang_briefly(url: str, dest_dir: Path, cookies_file: str | None = None):
         import time
 
         time.sleep(1)

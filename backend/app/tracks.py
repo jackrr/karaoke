@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import mimetypes
 import shutil
 import sqlite3
@@ -16,6 +17,8 @@ from .lrclib import fetch_synced_lyrics
 from .stems import mix_with_attenuated_vocals, run_demucs_sync
 from .websocket_manager import _is_active_member, manager
 from .youtube import extract_video_id, run_yt_dlp_sync, vtt_to_lrc
+
+logger = logging.getLogger(__name__)
 
 tracks_router = APIRouter()
 
@@ -280,6 +283,8 @@ async def process_track_download(
         if track is not None:
             await manager.broadcast_event(session_id, "track_updated", track)
 
+    logger.info("track %s: starting processing pipeline for %s", track_id, url)
+
     try:
         await _update_track(db, track_id, status="downloading")
         await _broadcast_current()
@@ -303,14 +308,26 @@ async def process_track_download(
                 lyrics_source="none",
             )
             await _broadcast_current()
+            logger.info("track %s: skip_track_download set, stubbed to ready", track_id)
             return
 
         dest_dir.mkdir(parents=True, exist_ok=True)
-        result = await asyncio.to_thread(run_yt_dlp_sync, url, dest_dir)
+        logger.info("track %s: downloading audio via yt-dlp", track_id)
+        result = await asyncio.to_thread(
+            run_yt_dlp_sync, url, dest_dir, settings.youtube_cookies_file
+        )
+        logger.info(
+            "track %s: download complete (title=%r, duration=%s, captions=%s)",
+            track_id,
+            result.title,
+            result.duration_seconds,
+            result.vtt_path is not None,
+        )
 
         if result.vtt_path is not None:
             await _update_track(db, track_id, status="fetching_lyrics")
             await _broadcast_current()
+            logger.info("track %s: converting bundled captions to lyrics", track_id)
             vtt_content = await asyncio.to_thread(result.vtt_path.read_text)
             lrc_content = vtt_to_lrc(vtt_content)
             lyrics_path = dest_dir / "lyrics.lrc"
@@ -320,6 +337,7 @@ async def process_track_download(
         else:
             await _update_track(db, track_id, status="fetching_lyrics")
             await _broadcast_current()
+            logger.info("track %s: no captions, looking up synced lyrics via lrclib", track_id)
             lrc_content = await fetch_synced_lyrics(
                 title=result.title,
                 artist=result.artist,
@@ -334,14 +352,17 @@ async def process_track_download(
             else:
                 lyrics_source = "none"
                 lyrics_path_str = None
+        logger.info("track %s: lyrics stage done (source=%s)", track_id, lyrics_source)
 
         await _update_track(db, track_id, status="stemming")
         await _broadcast_current()
 
+        logger.info("track %s: running demucs source separation", track_id)
         separation = await asyncio.to_thread(
             run_demucs_sync, result.audio_path, dest_dir, settings.demucs_model
         )
         mixed_path = dest_dir / "mixed.wav"
+        logger.info("track %s: mixing attenuated-vocal remix", track_id)
         await asyncio.to_thread(
             mix_with_attenuated_vocals,
             separation.vocals_path,
@@ -361,12 +382,14 @@ async def process_track_download(
             lyrics_source=lyrics_source,
         )
         await _broadcast_current()
+        logger.info("track %s: pipeline complete, ready for playback", track_id)
     except (Exception, SystemExit):
         # demucs.separate.main() calls sys.exit() on internal failures (e.g.
         # model loading errors), which raises SystemExit — a BaseException,
         # not caught by a bare `except Exception`. Catch it explicitly so
         # those failures are reported as track errors instead of silently
         # killing the background task and leaving the track stuck.
+        logger.exception("track %s: processing pipeline failed", track_id)
         await _update_track(
             db,
             track_id,

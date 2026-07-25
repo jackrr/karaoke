@@ -7,12 +7,16 @@ a fake that writes canned files into `dest_dir`, so no real network call is
 ever made.
 """
 
+import logging
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import webvtt
 import yt_dlp
+
+logger = logging.getLogger(__name__)
 
 _WATCH_V_RE = re.compile(r"[?&]v=([\w-]{11})")
 _YOUTU_BE_RE = re.compile(r"youtu\.be/([\w-]{11})")
@@ -75,6 +79,57 @@ def vtt_to_lrc(vtt_content: str) -> str:
     return "\n".join(lines)
 
 
+class _YtDlpLogAdapter:
+    """Routes yt-dlp's own diagnostic output through our logger.
+
+    `quiet`/`no_warnings` alone leave a hanging or retrying download
+    completely silent — this surfaces yt-dlp's retries, throttling, and
+    extractor warnings instead of us finding out only after the fact.
+    """
+
+    def debug(self, msg: str) -> None:
+        if msg.startswith("[debug] "):
+            return
+        logger.info("yt-dlp: %s", msg)
+
+    def info(self, msg: str) -> None:
+        logger.info("yt-dlp: %s", msg)
+
+    def warning(self, msg: str) -> None:
+        logger.warning("yt-dlp: %s", msg)
+
+    def error(self, msg: str) -> None:
+        logger.error("yt-dlp: %s", msg)
+
+
+def _make_progress_hook():
+    """Build a progress_hooks callback that logs at most once every 5s.
+
+    yt-dlp fires this on every read chunk (many times a second), so an
+    unthrottled log line here would flood the log instead of clarifying
+    what's happening.
+    """
+    last_logged = 0.0
+
+    def _hook(progress: dict) -> None:
+        nonlocal last_logged
+        status = progress.get("status")
+        if status == "downloading":
+            now = time.monotonic()
+            if now - last_logged < 5:
+                return
+            last_logged = now
+            pct = progress.get("_percent_str", "?").strip()
+            speed = progress.get("_speed_str", "?").strip()
+            logger.info("yt-dlp: downloading %s at %s", pct, speed)
+        elif status == "finished":
+            logger.info("yt-dlp: finished downloading %s", progress.get("filename"))
+        elif status == "error":
+            logger.warning("yt-dlp: download hook reported an error")
+
+    return _hook
+
+
 @dataclass
 class DownloadResult:
     audio_path: Path
@@ -85,13 +140,24 @@ class DownloadResult:
     album: str | None = None
 
 
-def run_yt_dlp_sync(url: str, dest_dir: Path) -> DownloadResult:
+def run_yt_dlp_sync(url: str, dest_dir: Path, cookies_file: str | None = None) -> DownloadResult:
     """Blocking download of best-audio + (if available) subtitles for `url`.
 
     Writes audio to `dest_dir/audio.<ext>` and, if captions are available
     (auto-generated or manual, preferring English), a VTT subtitle file into
     `dest_dir`. Must be called off the event loop (e.g. via
     `asyncio.to_thread`) since `yt_dlp.YoutubeDL` is fully synchronous.
+
+    `cookies_file`, if given, is a path to a Netscape-format cookies.txt
+    exported from a logged-in browser session; it's forwarded to yt-dlp so
+    age/bot-check-gated videos ("Please sign in to confirm you're not a
+    bot") can still be downloaded. The `android` player client is tried
+    first regardless, since it sidesteps that check for most videos without
+    needing cookies at all.
+
+    Forces single-video mode (`noplaylist`), since URLs copied from a
+    "radio"/mix queue or a playlist page carry a `list=` param that yt-dlp
+    would otherwise expand into downloading the entire playlist.
     """
     dest_dir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(dest_dir / "audio.%(ext)s")
@@ -99,16 +165,22 @@ def run_yt_dlp_sync(url: str, dest_dir: Path) -> DownloadResult:
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": outtmpl,
+        "noplaylist": True,
         "writesubtitles": True,
         "writeautomaticsub": True,
         "subtitleslangs": ["en"],
         "subtitlesformat": "vtt",
         "quiet": True,
         "noprogress": True,
-        "no_warnings": True,
+        "logger": _YtDlpLogAdapter(),
+        "progress_hooks": [_make_progress_hook()],
         "socket_timeout": 30,
+        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
     }
+    if cookies_file:
+        ydl_opts["cookiefile"] = cookies_file
 
+    logger.info("yt-dlp: extracting video info for %s", url)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
 
