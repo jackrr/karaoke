@@ -2,16 +2,6 @@
 
 A little web app for doing karaoke as a group.
 
-## Features (WIP)
-
-- **Sessions** — Create a room or join an existing one via 6-digit passcode
-- **Queue management** — Enqueue and list tracks (remove/reorder not yet implemented)
-- **Track sources** — YouTube URL (audio file upload not yet implemented)
-- **Real-time sync** — WebSocket broadcasts for queue, track, and client state
-- **Stem separation** — Upon enqueue, vocals are stemmed out (via Demucs) then re-added at a configured reduction in volume
-- **Lyrics** — Upon enqueue, lrc format lyrics are fetched from lrclib.net, falling back to YouTube captions converted to lrc format. Lyrics are shown in sync with the played track.
-- **Track streaming** - The playback view streams the modified currently active track and lyrics from the server
-
 ## Tech
 
 - Frontend: Bun + SvelteKit
