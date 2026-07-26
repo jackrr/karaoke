@@ -58,6 +58,58 @@ def test_vtt_to_lrc_empty_captions_yields_empty_string() -> None:
     assert vtt_to_lrc(empty_vtt) == ""
 
 
+ROLLING_VTT = """WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Well I'm sat here
+
+00:00:02.000 --> 00:00:03.000
+Well I'm sat here with
+
+00:00:03.000 --> 00:00:04.870
+Well I'm sat here with the ghost of what I was
+
+00:00:04.870 --> 00:00:06.000
+Well I'm sat here with the ghost of what I was
+thinking
+
+00:00:06.000 --> 00:00:08.000
+Well I'm sat here with the ghost of what I was
+thinking of a night in early spring
+"""
+
+
+def test_vtt_to_lrc_collapses_rolling_youtube_captions() -> None:
+    lrc = vtt_to_lrc(ROLLING_VTT)
+    lines = lrc.splitlines()
+    assert lines == [
+        "[00:01.00]Well I'm sat here with the ghost of what I was "
+        "thinking of a night in early spring",
+    ]
+
+
+DISTANT_REPEATED_LINE_VTT = """WEBVTT
+
+00:00:10.000 --> 00:00:12.000
+I love you
+
+00:01:30.000 --> 00:01:33.000
+I love you every single day
+"""
+
+
+def test_vtt_to_lrc_does_not_merge_distant_coincidental_prefix() -> None:
+    """A later, genuinely repeated lyric that happens to extend an earlier
+    line's text (e.g. a returning chorus) must not be collapsed into it just
+    because the two cues are far apart in the track."""
+    lrc = vtt_to_lrc(DISTANT_REPEATED_LINE_VTT)
+    lines = lrc.splitlines()
+    assert lines == [
+        "[00:10.00]I love you",
+        "[01:30.00]I love you every single day",
+    ]
+
+
 class _FakeYoutubeDL:
     """Stands in for `yt_dlp.YoutubeDL` in tests: writes canned files to
     dest_dir instead of touching the network, mirroring the interface

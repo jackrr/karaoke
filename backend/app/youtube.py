@@ -66,17 +66,57 @@ def _parse_vtt_timestamp_seconds(timestamp: str) -> float:
     return seconds
 
 
+_MAX_ROLLING_CAPTION_GAP_SECONDS = 3.0
+
+
+def _merge_rolling_captions(
+    entries: list[tuple[float, str]],
+) -> list[tuple[float, str]]:
+    """Collapse YouTube auto-caption "roll-up" cues into one entry per line.
+
+    Auto-generated captions redraw a line word-by-word across several cues
+    (each cue's joined text is a prefix of the next cue's), so naively
+    emitting one LRC entry per cue duplicates every line: once partial,
+    once complete. Keep the timestamp of the first cue in a growing run but
+    the text of the last (most complete) cue in that run.
+
+    The prefix check alone isn't enough to identify a rolling-caption run:
+    a genuinely repeated lyric (e.g. a later chorus) can coincidentally be a
+    prefix of another line far away in the track. Rolling cues redraw in
+    quick succession, so also require consecutive cues to be close in time.
+    """
+    merged: list[tuple[float, str]] = []
+    last_cue_start: float | None = None
+    for start, text in entries:
+        is_rolling_continuation = (
+            merged
+            and text.startswith(merged[-1][1])
+            and last_cue_start is not None
+            and start - last_cue_start <= _MAX_ROLLING_CAPTION_GAP_SECONDS
+        )
+        if is_rolling_continuation:
+            merged[-1] = (merged[-1][0], text)
+        else:
+            merged.append((start, text))
+        last_cue_start = start
+    return merged
+
+
 def vtt_to_lrc(vtt_content: str) -> str:
     """Convert VTT caption content to LRC-format lyrics text."""
     parsed = webvtt.WebVTT.from_string(vtt_content)
-    lines = []
+    entries = []
     for caption in parsed.captions:
         start_seconds = _parse_vtt_timestamp_seconds(caption.start)
         text = " ".join(line.strip() for line in caption.text.splitlines() if line.strip())
         if not text:
             continue
-        lines.append(f"[{_format_lrc_timestamp(start_seconds)}]{text}")
-    return "\n".join(lines)
+        entries.append((start_seconds, text))
+
+    merged = _merge_rolling_captions(entries)
+    return "\n".join(
+        f"[{_format_lrc_timestamp(start)}]{text}" for start, text in merged
+    )
 
 
 class _YtDlpLogAdapter:
