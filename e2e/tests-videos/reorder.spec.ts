@@ -116,9 +116,24 @@ test('drag-and-drop reorders the queue', async ({ page }) => {
   const secondBox = await trackRows.nth(1).boundingBox();
   if (!firstBox || !secondBox) throw new Error('Could not read bounding boxes for track rows');
 
-  const startX = firstBox.x + firstBox.width / 2;
-  const startY = firstBox.y + firstBox.height / 2;
-  const endX = secondBox.x + secondBox.width / 2;
+  // Anchor the drag on each row's `.title` span rather than the row's raw
+  // midpoint. Each row now packs a title, status, uploader, and two buttons
+  // (Play, Remove) into a single flex line, so the row's horizontal midpoint
+  // can land directly on a button depending on content width and the
+  // rendering environment's font metrics — which reproduced as a
+  // consistent, environment-specific drag failure in CI (though not
+  // locally) once the Remove button was added. The `.title` span is never a
+  // button, so anchoring there keeps the mousedown/mouseup targets stable
+  // regardless of how many action buttons a row renders.
+  const firstTitleBox = await trackRows.nth(0).locator('.title').boundingBox();
+  const secondTitleBox = await trackRows.nth(1).locator('.title').boundingBox();
+  if (!firstTitleBox || !secondTitleBox) {
+    throw new Error('Could not read bounding boxes for track row titles');
+  }
+
+  const startX = firstTitleBox.x + firstTitleBox.width / 2;
+  const startY = firstTitleBox.y + firstTitleBox.height / 2;
+  const endX = secondTitleBox.x + secondTitleBox.width / 2;
   // Aim deep into the second row's slot (not its exact midpoint) so the
   // swap decision isn't right on the boundary.
   const endY = secondBox.y + secondBox.height * 0.85;
