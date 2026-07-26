@@ -5,11 +5,12 @@
 
   type Participant = { client_id: string; display_name: string };
 
-  let { tracks = [], participants = [], onReorder, onPlay }: {
+  let { tracks = [], participants = [], onReorder, onPlay, onRemove }: {
     tracks: Track[];
     participants: Participant[];
     onReorder: (orderedIds: string[]) => Promise<void>;
     onPlay: (track: Track) => void;
+    onRemove: (track: Track) => Promise<void>;
   } = $props();
 
   let items = $state<Track[]>(untrack(() => [...tracks]));
@@ -74,6 +75,27 @@
       errorMessage = 'Failed to reorder the queue. Please try again.';
     }
   }
+
+  async function handleRemove(track: Track) {
+    const previousItems = items;
+    const newItems = items.filter((t) => t.id !== track.id);
+    items = newItems;
+    itemsVersion++;
+    const optimisticVersion = itemsVersion;
+    errorMessage = '';
+    try {
+      await onRemove(track);
+    } catch {
+      // Same version-guard as handleFinalize's revert: only restore the
+      // removed item if nothing else (e.g. a track_removed/queue broadcast)
+      // has replaced `items` since we applied our optimistic update.
+      if (itemsVersion === optimisticVersion) {
+        items = previousItems;
+        itemsVersion++;
+      }
+      errorMessage = 'Failed to remove the track. Please try again.';
+    }
+  }
 </script>
 
 <div class="queue-list">
@@ -103,6 +125,9 @@
               Play
             </button>
           {/if}
+          <button class="btn btn-remove" type="button" onclick={() => handleRemove(track)}>
+            Remove
+          </button>
         </li>
       {/each}
     </ul>
@@ -168,6 +193,11 @@
   }
 
   .btn-play {
+    padding: 0.2rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .btn-remove {
     padding: 0.2rem 0.75rem;
     font-size: 0.85rem;
   }

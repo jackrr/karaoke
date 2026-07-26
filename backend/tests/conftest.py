@@ -39,6 +39,9 @@ class WsTestClient:
     def put(self, *args, **kwargs):
         return self._test_client.put(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        return self._test_client.delete(*args, **kwargs)
+
     def websocket_connect(self, path: str):
         return self._test_client.websocket_connect(path)
 

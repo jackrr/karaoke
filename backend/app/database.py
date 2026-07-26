@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 
 import aiosqlite
 
@@ -19,6 +20,33 @@ def start_db(path: str | None = None) -> None:
     _db_connect_task = aiosqlite.connect(db_path)
 
 
+async def _ensure_last_active_at_column(conn: aiosqlite.Connection) -> None:
+    """Add `last_active_at` to a `sessions` table created before this column
+    existed. `CREATE TABLE IF NOT EXISTS` above is a no-op against an
+    already-existing on-disk database, so this ALTER TABLE is what actually
+    backfills the column there. Guarded because it's also a no-op on a fresh
+    database (column already present from the CREATE TABLE) or on any
+    subsequent call."""
+    try:
+        await conn.execute(
+            "ALTER TABLE sessions ADD COLUMN last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+
+async def touch_session(conn: aiosqlite.Connection, session_id: str) -> None:
+    """Bump a session's `last_active_at` to now.
+
+    Piggybacks on the caller's own commit — callers should already be about
+    to commit their own change, so this doesn't commit itself.
+    """
+    await conn.execute(
+        "UPDATE sessions SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (session_id,),
+    )
+
+
 async def create_tables(conn: aiosqlite.Connection) -> None:
     """Create database tables if they don't exist."""
     await conn.execute(
@@ -27,8 +55,16 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
             id TEXT PRIMARY KEY,
             code TEXT NOT NULL UNIQUE,
             host_client_id TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+        """
+    )
+    await _ensure_last_active_at_column(conn)
+    await conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sessions_last_active_at
+        ON sessions (last_active_at)
         """
     )
     await conn.execute(

@@ -44,6 +44,7 @@ describe("QueueList", () => {
       participants: [],
       onReorder,
       onPlay: vi.fn(),
+      onRemove: vi.fn(),
     });
 
     // Start a reorder (t1, t2 -> t2, t1); onReorder's promise stays pending,
@@ -69,6 +70,7 @@ describe("QueueList", () => {
       participants: [],
       onReorder,
       onPlay: vi.fn(),
+      onRemove: vi.fn(),
     });
 
     await waitFor(() => {
@@ -112,6 +114,7 @@ describe("QueueList", () => {
       participants: [],
       onReorder: vi.fn(),
       onPlay: vi.fn(),
+      onRemove: vi.fn(),
     });
 
     const titles = screen
@@ -136,6 +139,7 @@ describe("QueueList", () => {
       participants: [{ client_id: "client-42", display_name: "Charlie" }],
       onReorder: vi.fn(),
       onPlay: vi.fn(),
+      onRemove: vi.fn(),
     });
 
     expect(screen.getByText(/Added by Charlie/)).toBeTruthy();
@@ -155,6 +159,7 @@ describe("QueueList", () => {
       participants: [],
       onReorder: vi.fn(),
       onPlay: vi.fn(),
+      onRemove: vi.fn(),
     });
 
     expect(screen.getByText(/Added by unresolv/)).toBeTruthy();
@@ -171,6 +176,7 @@ describe("QueueList", () => {
       participants: [],
       onReorder,
       onPlay: vi.fn(),
+      onRemove: vi.fn(),
     });
 
     // svelte-dnd-action drives reordering via consider/finalize CustomEvents
@@ -201,6 +207,7 @@ describe("QueueList", () => {
       participants: [],
       onReorder,
       onPlay: vi.fn(),
+      onRemove: vi.fn(),
     });
 
     const list = container.querySelector("ul.tracks") as HTMLElement;
@@ -240,6 +247,7 @@ describe("QueueList", () => {
       participants: [],
       onReorder: vi.fn(),
       onPlay,
+      onRemove: vi.fn(),
     });
 
     const playButtons = screen.getAllByRole("button", { name: /play/i });
@@ -248,5 +256,135 @@ describe("QueueList", () => {
     await fireEvent.click(playButtons[0]);
 
     expect(onPlay).toHaveBeenCalledWith(readyTrack);
+  });
+
+  it("renders a Remove button per item regardless of status", () => {
+    const readyTrack = makeTrack({
+      id: "t1",
+      title: "Song One",
+      status: "ready",
+    });
+    const pendingTrack = makeTrack({
+      id: "t2",
+      title: "Song Two",
+      status: "pending",
+    });
+    render(QueueList, {
+      tracks: [readyTrack, pendingTrack],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove: vi.fn(),
+    });
+
+    const removeButtons = screen.getAllByRole("button", { name: /remove/i });
+    expect(removeButtons).toHaveLength(2);
+  });
+
+  it("optimistically removes an item and calls onRemove when clicked", async () => {
+    const t1 = makeTrack({ id: "t1", title: "Song One" });
+    const t2 = makeTrack({ id: "t2", title: "Song Two" });
+    const onRemove = vi.fn(() => Promise.resolve());
+    render(QueueList, {
+      tracks: [t1, t2],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove,
+    });
+
+    const removeButtons = screen.getAllByRole("button", { name: /remove/i });
+    await fireEvent.click(removeButtons[0]);
+
+    expect(onRemove).toHaveBeenCalledWith(t1);
+    await waitFor(() => {
+      expect(screen.queryByText("Song One")).toBeNull();
+    });
+    expect(screen.getByText("Song Two")).toBeTruthy();
+  });
+
+  it("restores the item and shows an error message when onRemove rejects", async () => {
+    const t1 = makeTrack({ id: "t1", title: "Song One" });
+    const t2 = makeTrack({ id: "t2", title: "Song Two" });
+    const onRemove = vi.fn(() => Promise.reject(new Error("boom")));
+    render(QueueList, {
+      tracks: [t1, t2],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove,
+    });
+
+    const removeButtons = screen.getAllByRole("button", { name: /remove/i });
+    await fireEvent.click(removeButtons[0]);
+
+    await waitFor(() =>
+      expect(screen.getByText(/failed to remove/i)).toBeTruthy(),
+    );
+
+    const titles = screen
+      .getAllByText(/Song (One|Two)/)
+      .map((el) => el.textContent);
+    expect(titles).toEqual(["Song One", "Song Two"]);
+  });
+
+  it("does not clobber a newer broadcast update when its own remove rejects", async () => {
+    const t1 = makeTrack({ id: "t1", title: "Song One" });
+    const t2 = makeTrack({ id: "t2", title: "Song Two" });
+    const t3 = makeTrack({ id: "t3", title: "Song Three" });
+
+    let rejectOnRemove: (err: Error) => void;
+    const onRemove = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectOnRemove = reject;
+        }),
+    );
+
+    const { rerender } = render(QueueList, {
+      tracks: [t1, t2, t3],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove,
+    });
+
+    const removeButtons = screen.getAllByRole("button", { name: /remove/i });
+    await fireEvent.click(removeButtons[0]);
+
+    await waitFor(() => expect(onRemove).toHaveBeenCalledWith(t1));
+
+    // While the DELETE is still in flight, a track_removed broadcast (from
+    // another member's concurrent removal) arrives and updates the `tracks`
+    // prop from the parent — say it removed t2 instead.
+    const broadcastTracks = [t1, t3];
+    await rerender({
+      tracks: broadcastTracks,
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove,
+    });
+
+    await waitFor(() => {
+      const titles = screen
+        .getAllByText(/Song (One|Two|Three)/)
+        .map((el) => el.textContent);
+      expect(titles).toEqual(["Song One", "Song Three"]);
+    });
+
+    // Now the in-flight remove rejects. Since the broadcast already
+    // superseded our optimistic state, the revert must be skipped so the
+    // broadcast-derived list isn't clobbered by our stale snapshot.
+    rejectOnRemove!(new Error("boom"));
+
+    await waitFor(() =>
+      expect(screen.getByText(/failed to remove/i)).toBeTruthy(),
+    );
+
+    const titles = screen
+      .getAllByText(/Song (One|Two|Three)/)
+      .map((el) => el.textContent);
+    expect(titles).toEqual(["Song One", "Song Three"]);
   });
 });
