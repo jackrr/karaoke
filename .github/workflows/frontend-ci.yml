@@ -3,18 +3,36 @@ name: Frontend CI
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-ci.yml"
   push:
     branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-ci.yml"
 
 jobs:
+  changes:
+    name: Detect frontend changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for frontend changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - "frontend/**"
+              - ".github/workflows/frontend-ci.yml"
+
   checks:
     name: Run frontend checks
+    needs: changes
+    # Wrapper job: the workflow always triggers (no `paths:` filter above) so
+    # this check name is always reported for a required-status-check to
+    # attach to, but the real work only runs when frontend files changed.
+    # GitHub treats a skipped required check as passing.
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,4 +62,3 @@ jobs:
 
       - name: Run tests
         run: bun run test
-
