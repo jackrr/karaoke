@@ -60,20 +60,20 @@ def test_vtt_to_lrc_empty_captions_yields_empty_string() -> None:
 
 ROLLING_VTT = """WEBVTT
 
-00:00:01.000 --> 00:00:02.000
+00:00:01.000 --> 00:00:01.700
 Well I'm sat here
 
-00:00:02.000 --> 00:00:03.000
+00:00:01.700 --> 00:00:02.400
 Well I'm sat here with
 
-00:00:03.000 --> 00:00:04.870
+00:00:02.400 --> 00:00:03.100
 Well I'm sat here with the ghost of what I was
 
-00:00:04.870 --> 00:00:06.000
+00:00:03.100 --> 00:00:03.800
 Well I'm sat here with the ghost of what I was
 thinking
 
-00:00:06.000 --> 00:00:08.000
+00:00:03.800 --> 00:00:04.500
 Well I'm sat here with the ghost of what I was
 thinking of a night in early spring
 """

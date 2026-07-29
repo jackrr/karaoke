@@ -66,28 +66,17 @@ def _parse_vtt_timestamp_seconds(timestamp: str) -> float:
     return seconds
 
 
-_MAX_ROLLING_CAPTION_GAP_SECONDS = 3.0
+_MAX_ROLLING_CAPTION_GAP_SECONDS = 1.0
 
 
 def _merge_rolling_captions(
     entries: list[tuple[float, str]],
 ) -> list[tuple[float, str]]:
-    """Collapse YouTube auto-caption "roll-up" cues into one entry per line.
-
-    Auto-generated captions redraw a line word-by-word across several cues
-    (each cue's joined text is a prefix of the next cue's), so naively
-    emitting one LRC entry per cue duplicates every line: once partial,
-    once complete. Keep the timestamp of the first cue in a growing run but
-    the text of the last (most complete) cue in that run.
-
-    The prefix check alone isn't enough to identify a rolling-caption run:
-    a genuinely repeated lyric (e.g. a later chorus) can coincidentally be a
-    prefix of another line far away in the track. Rolling cues redraw in
-    quick succession, so also require consecutive cues to be close in time.
-    """
+    """Collapse YouTube auto-caption cues that redraw one line word-by-word."""
     merged: list[tuple[float, str]] = []
     last_cue_start: float | None = None
     for start, text in entries:
+        # Time gate avoids merging a coincidentally-prefix-matching repeated lyric (e.g. a later chorus).
         is_rolling_continuation = (
             merged
             and text.startswith(merged[-1][1])
