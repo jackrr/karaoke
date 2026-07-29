@@ -22,7 +22,6 @@ async function createSessionAndGetCode(
   await hostPage.goto('/');
   await createSessionViaUI(hostPage);
   const sessionId = new URL(hostPage.url()).pathname.replace('/session/', '');
-  await openSessionMenu(hostPage);
   const codeText = await hostPage.locator('.session-card h2').innerText();
   const code = codeText.replace(/\D/g, '');
   return { sessionId, code };
@@ -40,6 +39,7 @@ test('chat message broadcasts to other clients in the same session', async ({ br
   await joinSessionViaUI(page2, code, 'Guest');
 
   await Promise.all([waitForWebSocketConnected(page1), waitForWebSocketConnected(page2)]);
+  await openSessionMenu(page1);
   await openSessionMenu(page2);
 
   await page1.locator('.chat-input').fill('hello from client 1');
@@ -64,6 +64,7 @@ test('sessions are isolated — messages do not leak across sessions', async ({ 
   await createSessionAndGetCode(pageB);
 
   await Promise.all([waitForWebSocketConnected(pageA), waitForWebSocketConnected(pageB)]);
+  await openSessionMenu(pageA);
 
   await pageA.locator('.chat-input').fill('secret to session A');
   await pageA.getByRole('button', { name: 'Send' }).click();

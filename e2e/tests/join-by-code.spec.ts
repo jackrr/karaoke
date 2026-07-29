@@ -19,10 +19,8 @@ test('joining by session code adds a second participant and shows real display n
   await createSessionViaUI(pageA);
   await waitForWebSocketConnected(pageA);
 
-  // SessionCard and chat now live inside the session menu.
-  await openSessionMenu(pageA);
-
-  // Read the code straight from the rendered SessionCard header.
+  // Read the code straight from the rendered SessionCard header (shown
+  // directly on the page).
   const codeText = await pageA.locator('.session-card h2').innerText();
   const code = codeText.replace(/\D/g, '');
   expect(code).toMatch(/^\d{6}$/);
@@ -38,7 +36,9 @@ test('joining by session code adds a second participant and shows real display n
   await expect(pageB.locator('.participants li')).toHaveCount(2);
 
   // A chat message from context B should show B's real display name in
-  // context A's view, not a hardcoded placeholder like "you".
+  // context A's view, not a hardcoded placeholder like "you". Chat lives
+  // inside the session menu, so open it on A to see the broadcast message.
+  await openSessionMenu(pageA);
   await pageB.locator('.chat-input').fill('hi from bob');
   await pageB.getByRole('button', { name: 'Send' }).click();
 

@@ -35,15 +35,14 @@ test('session page shows the session code, connected status, and chat input', as
   // Wait for websocket to connect
   await waitForWebSocketConnected(page);
 
-  // SessionCard and chat now live inside the session menu.
-  await openSessionMenu(page);
-
-  // The SessionCard header shows the formatted 6-digit code, e.g. "123 456".
+  // The SessionCard header (shown directly on the page) has the formatted
+  // 6-digit code, e.g. "123 456".
   await expect(page.locator('.session-card h2')).toHaveText(/^\d{3} \d{3}$/, {
     timeout: 10000,
   });
 
-  // Verify chat elements are present
+  // Chat and Leave Session live inside the session menu.
+  await openSessionMenu(page);
   await expect(page.locator('.chat-input')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Leave Session' })).toBeVisible();
 });
@@ -59,8 +58,7 @@ test('creating a session lets the host set their display name and shows them con
   await waitForWebSocketConnected(page);
 
   // The host's chosen name — not an auto-generated "Guest-XXXX" — should
-  // appear in the participants list, inside the session menu.
-  await openSessionMenu(page);
+  // appear in the participants list shown on the page's SessionCard.
   await expect(page.locator('.participants li')).toHaveText('Hostina (host)');
 });
 

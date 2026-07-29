@@ -1,19 +1,13 @@
 <script lang="ts">
-  import SessionCard from './SessionCard.svelte';
   import Chat from './Chat.svelte';
 
-  type Participant = { client_id: string; display_name: string; is_host: boolean };
   type ChatMessage = { sender: string; text: string; type?: string };
 
   let {
-    code,
-    participants,
     messages,
     onSendMessage,
     onLeave,
   }: {
-    code: string;
-    participants: Participant[];
     messages: ChatMessage[];
     onSendMessage: (text: string) => void;
     onLeave: () => void;
@@ -56,7 +50,6 @@
   <button class="close-btn" type="button" onclick={close} aria-label="Close menu">✕</button>
 
   <div class="menu-content">
-    <SessionCard {code} {participants} />
     <Chat {messages} onSend={onSendMessage} />
     <button class="btn btn-secondary leave-btn" type="button" onclick={onLeave}>
       Leave Session

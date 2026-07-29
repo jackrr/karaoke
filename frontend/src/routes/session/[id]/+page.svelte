@@ -4,6 +4,7 @@
   import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
   import TrackPlayer from '$lib/components/TrackPlayer.svelte';
   import QueueList from '$lib/components/QueueList.svelte';
+  import SessionCard from '$lib/components/SessionCard.svelte';
   import SessionMenu from '$lib/components/SessionMenu.svelte';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
@@ -172,8 +173,6 @@
 
   <SessionMenu
     bind:this={sessionMenu}
-    code={session.code}
-    participants={session.participants}
     {messages}
     onSendMessage={handleSend}
     onLeave={handleLeave}
@@ -186,27 +185,27 @@
       <p class="session-ended">This session has ended (it was idle too long). Start a new one from the home page.</p>
     {/if}
 
-    <p class="online">{session.online} online</p>
+    <SessionCard code={session.code} queued={tracks.length} participants={session.participants} />
 
     <p class="status" class:connected>{connected ? 'Connected' : 'Disconnected'}</p>
 
     <YoutubeDownloadForm onSubmit={handleSubmitTrack} />
 
-    <QueueList
-      {tracks}
-      participants={session.participants}
-      onReorder={handleReorder}
-      onPlay={(t) => (nowPlaying = t)}
-      onRemove={handleRemove}
-    />
+    {#if tracks.length}
+      <QueueList
+        {tracks}
+        participants={session.participants}
+        onReorder={handleReorder}
+        onPlay={(t) => (nowPlaying = t)}
+        onRemove={handleRemove}
+      />
+    {/if}
   {/if}
 {:else if loading}
   <p class="loading">Loading session...</p>
 {/if}
 
 <style>
-  .online { color: #666; }
-
   .session-ended {
     color: #d32f2f;
     font-weight: 600;

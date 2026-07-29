@@ -6,8 +6,6 @@ function setup(overrides: Partial<Parameters<typeof SessionMenu>[1]> = {}) {
   const onSendMessage = vi.fn();
   const onLeave = vi.fn();
   const result = render(SessionMenu, {
-    code: "123456",
-    participants: [{ client_id: "c1", display_name: "Alice", is_host: true }],
     messages: [{ sender: "Alice", text: "hi" }],
     onSendMessage,
     onLeave,
@@ -65,15 +63,13 @@ describe("SessionMenu", () => {
     const dialog = container.querySelector("dialog")!;
     component.open();
 
-    await fireEvent.click(getByText("123 456"));
+    await fireEvent.click(getByText("hi"));
 
     expect(dialog.hasAttribute("open")).toBe(true);
   });
 
-  it("renders SessionCard and Chat content", () => {
+  it("renders Chat content", () => {
     const { getByText } = setup();
-    expect(getByText("123 456")).toBeTruthy();
-    expect(getByText("Alice (host)")).toBeTruthy();
     expect(getByText("hi")).toBeTruthy();
   });
 
