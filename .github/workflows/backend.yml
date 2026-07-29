@@ -2,21 +2,39 @@ name: backend
 
 on:
   pull_request:
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend.yml"
   push:
     branches: [main]
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend.yml"
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect backend changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for backend changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - "backend/**"
+              - ".github/workflows/backend.yml"
+
   check:
     name: lint & type check
+    needs: changes
+    # Wrapper job: the workflow always triggers (no `paths:` filter above) so
+    # this check name is always reported for a required-status-check to
+    # attach to, but the real work only runs when backend files changed.
+    # GitHub treats a skipped required check as passing.
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
