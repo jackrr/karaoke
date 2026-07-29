@@ -10,30 +10,35 @@ const lines: LrcLine[] = [
 ];
 
 describe("LyricsDisplay", () => {
-  it("renders all lines", () => {
-    const { getByText } = render(LyricsDisplay, { lines, currentTime: 0 });
-    expect(getByText("First line")).toBeTruthy();
-    expect(getByText("Second line")).toBeTruthy();
-    expect(getByText("Third line")).toBeTruthy();
-  });
-
-  it("marks the line at or before currentTime as active", () => {
-    const { getByText } = render(LyricsDisplay, { lines, currentTime: 4 });
-    expect(getByText("Second line").classList.contains("active")).toBe(true);
-    expect(getByText("First line").classList.contains("active")).toBe(false);
-    expect(getByText("Third line").classList.contains("active")).toBe(false);
-  });
-
-  it("moves the active line forward when rerendered with a later currentTime", async () => {
-    const { getByText, rerender } = render(LyricsDisplay, {
+  it("renders only the current line", () => {
+    const { getByText, queryByText } = render(LyricsDisplay, {
       lines,
       currentTime: 4,
     });
-    expect(getByText("Second line").classList.contains("active")).toBe(true);
+    expect(getByText("Second line")).toBeTruthy();
+    expect(queryByText("First line")).toBeNull();
+    expect(queryByText("Third line")).toBeNull();
+  });
+
+  it("shows a placeholder before the first cue", () => {
+    const { getByText, queryByText } = render(LyricsDisplay, {
+      lines,
+      currentTime: 0,
+    });
+    expect(getByText("♪")).toBeTruthy();
+    expect(queryByText("First line")).toBeNull();
+  });
+
+  it("moves the current line forward when rerendered with a later currentTime", async () => {
+    const { getByText, queryByText, rerender } = render(LyricsDisplay, {
+      lines,
+      currentTime: 4,
+    });
+    expect(getByText("Second line")).toBeTruthy();
 
     await rerender({ lines, currentTime: 6 });
 
-    expect(getByText("Third line").classList.contains("active")).toBe(true);
-    expect(getByText("Second line").classList.contains("active")).toBe(false);
+    expect(getByText("Third line")).toBeTruthy();
+    expect(queryByText("Second line")).toBeNull();
   });
 });

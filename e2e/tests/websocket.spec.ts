@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createSessionViaUI, joinSessionViaUI, waitForWebSocketConnected, leaveSession } from './helpers';
+import {
+  createSessionViaUI,
+  joinSessionViaUI,
+  waitForWebSocketConnected,
+  leaveSession,
+  openSessionMenu,
+} from './helpers';
 
 /**
  * Create a session in `hostPage` via the UI and return its id and code.
@@ -33,6 +39,8 @@ test('chat message broadcasts to other clients in the same session', async ({ br
   await joinSessionViaUI(page2, code, 'Guest');
 
   await Promise.all([waitForWebSocketConnected(page1), waitForWebSocketConnected(page2)]);
+  await openSessionMenu(page1);
+  await openSessionMenu(page2);
 
   await page1.locator('.chat-input').fill('hello from client 1');
   await page1.getByRole('button', { name: 'Send' }).click();
@@ -56,6 +64,7 @@ test('sessions are isolated — messages do not leak across sessions', async ({ 
   await createSessionAndGetCode(pageB);
 
   await Promise.all([waitForWebSocketConnected(pageA), waitForWebSocketConnected(pageB)]);
+  await openSessionMenu(pageA);
 
   await pageA.locator('.chat-input').fill('secret to session A');
   await pageA.getByRole('button', { name: 'Send' }).click();

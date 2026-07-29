@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { createSessionViaUI, joinSessionViaUI, waitForWebSocketConnected } from './helpers';
+import {
+  createSessionViaUI,
+  joinSessionViaUI,
+  waitForWebSocketConnected,
+  openSessionMenu,
+} from './helpers';
 
 test('joining by session code adds a second participant and shows real display names in chat', async ({
   browser,
@@ -14,7 +19,8 @@ test('joining by session code adds a second participant and shows real display n
   await createSessionViaUI(pageA);
   await waitForWebSocketConnected(pageA);
 
-  // Read the code straight from the rendered SessionCard header.
+  // Read the code straight from the rendered SessionCard header (shown
+  // directly on the page).
   const codeText = await pageA.locator('.session-card h2').innerText();
   const code = codeText.replace(/\D/g, '');
   expect(code).toMatch(/^\d{6}$/);
@@ -23,13 +29,16 @@ test('joining by session code adds a second participant and shows real display n
   await pageB.goto('/join');
   await joinSessionViaUI(pageB, code, 'Bob');
   await waitForWebSocketConnected(pageB);
+  await openSessionMenu(pageB);
 
   // Both contexts should now see 2 participants.
   await expect(pageA.locator('.participants li')).toHaveCount(2);
   await expect(pageB.locator('.participants li')).toHaveCount(2);
 
   // A chat message from context B should show B's real display name in
-  // context A's view, not a hardcoded placeholder like "you".
+  // context A's view, not a hardcoded placeholder like "you". Chat lives
+  // inside the session menu, so open it on A to see the broadcast message.
+  await openSessionMenu(pageA);
   await pageB.locator('.chat-input').fill('hi from bob');
   await pageB.getByRole('button', { name: 'Send' }).click();
 

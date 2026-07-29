@@ -4,22 +4,24 @@
 
   let { lines, currentTime }: { lines: LrcLine[]; currentTime: number } = $props();
   const activeIndex = $derived(findCurrentLineIndex(lines, currentTime));
+  const activeLine = $derived(activeIndex === -1 ? null : lines[activeIndex]);
 </script>
 
 <div class="lyrics">
-  {#each lines as line, i (line.time)}
-    <p class:active={i === activeIndex}>{line.text}</p>
-  {/each}
+  <p class="current-line">{activeLine ? activeLine.text : '♪'}</p>
 </div>
 
 <style>
-  .lyrics p {
-    opacity: 0.5;
-    transition: opacity 0.2s;
+  .lyrics {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
   }
 
-  .lyrics p.active {
-    opacity: 1;
+  .current-line {
+    margin: 0;
+    font-size: clamp(1.25rem, 5vw, 2.5rem);
     font-weight: 600;
   }
 </style>

@@ -86,6 +86,13 @@ test('drag-and-drop reorders the queue', async ({ page }) => {
   await expect(trackRows).toHaveCount(3);
   await expect(page.locator('.status-ready')).toHaveCount(3, { timeout: 10_000 });
 
+  // Show the popout session menu (queue/session info/chat drawer) before
+  // getting into the drag-and-drop demo.
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: 'Close menu' }).click();
+  await page.waitForTimeout(400);
+
   const initialTracks = await fetchTracks(page, sessionId);
   const initialOrder = initialTracks.tracks.map((t) => t.id);
   expect(initialOrder).toEqual(created);
@@ -176,4 +183,9 @@ test('drag-and-drop reorders the queue', async ({ page }) => {
   expect([...finalOrder].sort()).toEqual([...initialOrder].sort());
   // The dragged track (originally first) should no longer be first.
   expect(finalOrder[0]).not.toBe(initialOrder[0]);
+
+  // Show the transition into the full-screen "now playing" view.
+  await page.getByRole('button', { name: 'Play' }).first().click();
+  await expect(page.locator('.playback-controls')).toBeVisible();
+  await page.waitForTimeout(1000);
 });

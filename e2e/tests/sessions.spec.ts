@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createSessionViaUI, waitForWebSocketConnected } from './helpers';
+import { createSessionViaUI, waitForWebSocketConnected, openSessionMenu } from './helpers';
 
 test('create session via UI', async ({ page }) => {
   await page.goto('/');
@@ -32,16 +32,17 @@ test('session page shows the session code, connected status, and chat input', as
   await page.goto('/');
   await createSessionViaUI(page);
 
-  // Wait for the session page to fully load — the SessionCard header shows
-  // the formatted 6-digit code, e.g. "123 456".
+  // Wait for websocket to connect
+  await waitForWebSocketConnected(page);
+
+  // The SessionCard header (shown directly on the page) has the formatted
+  // 6-digit code, e.g. "123 456".
   await expect(page.locator('.session-card h2')).toHaveText(/^\d{3} \d{3}$/, {
     timeout: 10000,
   });
 
-  // Wait for websocket to connect
-  await waitForWebSocketConnected(page);
-
-  // Verify chat elements are present
+  // Chat and Leave Session live inside the session menu.
+  await openSessionMenu(page);
   await expect(page.locator('.chat-input')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Leave Session' })).toBeVisible();
 });
@@ -53,12 +54,12 @@ test('creating a session lets the host set their display name and shows them con
   await page.getByLabel('Display name').fill('Hostina');
   await createSessionViaUI(page);
 
-  // The host's chosen name — not an auto-generated "Guest-XXXX" — should
-  // appear in the participants list.
-  await expect(page.locator('.participants li')).toHaveText('Hostina (host)');
-
   // The websocket should connect for the session's creator.
   await waitForWebSocketConnected(page);
+
+  // The host's chosen name — not an auto-generated "Guest-XXXX" — should
+  // appear in the participants list shown on the page's SessionCard.
+  await expect(page.locator('.participants li')).toHaveText('Hostina (host)');
 });
 
 test('error handling — invalid session redirects home with a message', async ({ page }) => {
