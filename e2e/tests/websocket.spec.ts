@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createSessionViaUI, joinSessionViaUI, waitForWebSocketConnected, leaveSession } from './helpers';
+import {
+  createSessionViaUI,
+  joinSessionViaUI,
+  waitForWebSocketConnected,
+  leaveSession,
+  openSessionMenu,
+} from './helpers';
 
 /**
  * Create a session in `hostPage` via the UI and return its id and code.
@@ -16,6 +22,7 @@ async function createSessionAndGetCode(
   await hostPage.goto('/');
   await createSessionViaUI(hostPage);
   const sessionId = new URL(hostPage.url()).pathname.replace('/session/', '');
+  await openSessionMenu(hostPage);
   const codeText = await hostPage.locator('.session-card h2').innerText();
   const code = codeText.replace(/\D/g, '');
   return { sessionId, code };
@@ -33,6 +40,7 @@ test('chat message broadcasts to other clients in the same session', async ({ br
   await joinSessionViaUI(page2, code, 'Guest');
 
   await Promise.all([waitForWebSocketConnected(page1), waitForWebSocketConnected(page2)]);
+  await openSessionMenu(page2);
 
   await page1.locator('.chat-input').fill('hello from client 1');
   await page1.getByRole('button', { name: 'Send' }).click();

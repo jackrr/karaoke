@@ -105,9 +105,22 @@ export async function waitForWebSocketConnected(page: Page): Promise<void> {
 }
 
 /**
- * Leave a session page.
+ * Open the session menu (a native `<dialog>`) that holds the SessionCard,
+ * chat, and the Leave Session button.
+ */
+export async function openSessionMenu(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Open menu' }).click();
+}
+
+/**
+ * Leave a session page. Opens the session menu first (if it isn't already
+ * open) since the Leave Session button lives inside it.
  */
 export async function leaveSession(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Leave Session' }).click();
+  const leaveButton = page.getByRole('button', { name: 'Leave Session' });
+  if (!(await leaveButton.isVisible())) {
+    await openSessionMenu(page);
+  }
+  await leaveButton.click();
   await page.waitForURL('/');
 }

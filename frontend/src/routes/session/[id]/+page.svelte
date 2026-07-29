@@ -1,10 +1,10 @@
 <script lang="ts">
   import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, removeTrack, type Track } from '$lib/api';
   import { getDisplayName } from '$lib/identity';
-  import SessionCard from '$lib/components/SessionCard.svelte';
   import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
   import TrackPlayer from '$lib/components/TrackPlayer.svelte';
   import QueueList from '$lib/components/QueueList.svelte';
+  import SessionMenu from '$lib/components/SessionMenu.svelte';
   import { goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
 
@@ -21,7 +21,6 @@
   let loading = $state(true);
   let connected = $state(false);
   let sessionEnded = $state(false);
-  let message = $state('');
   let messages = $state<Array<{ sender: string; text: string; type?: string }>>([]);
   let tracks = $state<Track[]>([]);
   let nowPlaying = $state<Track | null>(null);
@@ -34,6 +33,7 @@
   let ws: ReturnType<typeof createSessionWebSocket> | null = null;
   let sessionId = '';
   const displayName = getDisplayName();
+  let sessionMenu: { open: () => void; close: () => void } | undefined = $state();
 
   async function refreshSession() {
     const data = await getSession(sessionId);
@@ -157,59 +157,49 @@
     goto('/');
   }
 
-  function handleSend() {
-    if (!ws || !message.trim()) return;
+  function handleSend(text: string) {
+    if (!ws) return;
     // The server broadcasts to every connection in the session, including the
     // sender's own socket — `onMessage` renders it, so don't also push here.
-    ws.send('message', { text: message.trim(), sender: displayName });
-    message = '';
+    ws.send('message', { text, sender: displayName });
   }
 </script>
 
 {#if session}
-  {#if sessionEnded}
-    <p class="session-ended">This session has ended (it was idle too long). Start a new one from the home page.</p>
-  {/if}
+  <button class="menu-trigger" type="button" onclick={() => sessionMenu?.open()} aria-label="Open menu">
+    ☰
+  </button>
 
-  <SessionCard
+  <SessionMenu
+    bind:this={sessionMenu}
     code={session.code}
     participants={session.participants}
-  />
-  <p class="online">{session.online} online</p>
-
-  <p class="status" class:connected>{connected ? 'Connected' : 'Disconnected'}</p>
-
-  {#if messages.length}
-    <div class="messages">
-      {#each messages as msg}
-        <div class="message">
-          <strong>{msg.sender}:</strong> {msg.text}
-        </div>
-      {/each}
-    </div>
-  {/if}
-
-  <form class="chat-form" onsubmit={(e) => { e.preventDefault(); handleSend(); }}>
-    <input class="chat-input" bind:value={message} placeholder="Type a message..." />
-    <button type="submit" class="btn btn-primary">Send</button>
-  </form>
-
-  <YoutubeDownloadForm onSubmit={handleSubmitTrack} />
-
-  <QueueList
-    {tracks}
-    participants={session.participants}
-    onReorder={handleReorder}
-    onPlay={(t) => (nowPlaying = t)}
-    onRemove={handleRemove}
+    {messages}
+    onSendMessage={handleSend}
+    onLeave={handleLeave}
   />
 
   {#if nowPlaying}
-    <TrackPlayer {sessionId} track={nowPlaying} />
-    <button class="btn btn-secondary" onclick={() => (nowPlaying = null)}>Stop</button>
-  {/if}
+    <TrackPlayer {sessionId} track={nowPlaying} onStop={() => (nowPlaying = null)} />
+  {:else}
+    {#if sessionEnded}
+      <p class="session-ended">This session has ended (it was idle too long). Start a new one from the home page.</p>
+    {/if}
 
-  <button class="btn btn-secondary" onclick={handleLeave}>Leave Session</button>
+    <p class="online">{session.online} online</p>
+
+    <p class="status" class:connected>{connected ? 'Connected' : 'Disconnected'}</p>
+
+    <YoutubeDownloadForm onSubmit={handleSubmitTrack} />
+
+    <QueueList
+      {tracks}
+      participants={session.participants}
+      onReorder={handleReorder}
+      onPlay={(t) => (nowPlaying = t)}
+      onRemove={handleRemove}
+    />
+  {/if}
 {:else if loading}
   <p class="loading">Loading session...</p>
 {/if}
@@ -226,47 +216,21 @@
   .connected { color: #16a34a; }
   .status:not(.connected) { color: #d32f2f; }
 
-  .messages {
-    max-height: 300px;
-    overflow-y: auto;
-    margin: 1rem 0;
-  }
-
-  .message {
-    padding: 0.25rem 0;
-    border-bottom: 1px solid #eee;
-  }
-
-  form {
-    display: flex;
-    gap: 1rem;
-    margin: 1.5rem 0;
-  }
-
-  input {
-    flex: 1;
-    padding: 0.5rem;
-  }
-
-  .btn {
-    padding: 0.5rem 1.5rem;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
   .loading {
     margin: 1rem;
   }
 
-  .chat-form {
-    display: flex;
-    gap: 1rem;
-    margin: 1.5rem 0;
-  }
-
-  .chat-input {
-    flex: 1;
-    padding: 0.5rem;
+  .menu-trigger {
+    position: fixed;
+    top: 4.25rem;
+    right: 1rem;
+    z-index: 700;
+    min-width: 44px;
+    min-height: 44px;
+    border: 1px solid #e2e2e2;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 1.1rem;
+    cursor: pointer;
   }
 </style>

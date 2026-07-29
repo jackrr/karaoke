@@ -30,6 +30,27 @@ describe("TrackPlayer", () => {
     vi.restoreAllMocks();
   });
 
+  it("hides the native audio controls and renders PlaybackControls instead", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+    );
+
+    const { container, getByRole } = render(TrackPlayer, {
+      sessionId: "s1",
+      track: makeTrack(),
+      onStop: vi.fn(),
+    });
+
+    const audio = container.querySelector("audio");
+    expect(audio).toBeTruthy();
+    expect(audio?.hasAttribute("controls")).toBe(false);
+    expect(getComputedStyle(audio!).display).toBe("none");
+
+    expect(getByRole("button", { name: "Play" })).toBeTruthy();
+    expect(getByRole("button", { name: "Stop" })).toBeTruthy();
+  });
+
   it("shows a message when lyrics are unavailable", async () => {
     vi.stubGlobal(
       "fetch",
@@ -39,30 +60,32 @@ describe("TrackPlayer", () => {
     const { getByText } = render(TrackPlayer, {
       sessionId: "s1",
       track: makeTrack(),
+      onStop: vi.fn(),
     });
 
     await waitFor(() => expect(getByText(/no lyrics available/i)).toBeTruthy());
   });
 
-  it("renders lyrics once they resolve successfully", async () => {
+  it("renders only the current lyric line once lyrics resolve", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
         Promise.resolve({
           ok: true,
           status: 200,
-          text: () => Promise.resolve("[00:01.00]Hello\n[00:03.00]World"),
+          text: () => Promise.resolve("[00:00.00]Hello\n[00:03.00]World"),
         }),
       ),
     );
 
-    const { getByText } = render(TrackPlayer, {
+    const { getByText, queryByText } = render(TrackPlayer, {
       sessionId: "s1",
       track: makeTrack(),
+      onStop: vi.fn(),
     });
 
     await waitFor(() => expect(getByText("Hello")).toBeTruthy());
-    expect(getByText("World")).toBeTruthy();
+    expect(queryByText("World")).toBeNull();
   });
 
   it("refetches and updates lyrics when the track changes, without showing stale content", async () => {
@@ -71,13 +94,13 @@ describe("TrackPlayer", () => {
         return Promise.resolve({
           ok: true,
           status: 200,
-          text: () => Promise.resolve("[00:01.00]Hello\n[00:03.00]World"),
+          text: () => Promise.resolve("[00:00.00]Hello\n[00:03.00]World"),
         });
       }
       return Promise.resolve({
         ok: true,
         status: 200,
-        text: () => Promise.resolve("[00:01.00]Goodbye\n[00:03.00]Moon"),
+        text: () => Promise.resolve("[00:00.00]Goodbye\n[00:03.00]Moon"),
       });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -88,15 +111,14 @@ describe("TrackPlayer", () => {
     const { getByText, queryByText, rerender } = render(TrackPlayer, {
       sessionId: "s1",
       track: trackA,
+      onStop: vi.fn(),
     });
 
     await waitFor(() => expect(getByText("Hello")).toBeTruthy());
-    expect(getByText("World")).toBeTruthy();
 
-    await rerender({ sessionId: "s1", track: trackB });
+    await rerender({ sessionId: "s1", track: trackB, onStop: vi.fn() });
 
     await waitFor(() => expect(getByText("Goodbye")).toBeTruthy());
-    expect(getByText("Moon")).toBeTruthy();
     expect(queryByText("Hello")).toBeNull();
     expect(queryByText("World")).toBeNull();
   });

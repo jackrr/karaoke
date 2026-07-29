@@ -1,9 +1,18 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig, configDefaults } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { svelteTesting } from "@testing-library/svelte/vite";
 
+// SessionCard.svelte imports from the bare `$lib` alias. In the real app
+// that's resolved by SvelteKit's vite plugin, which isn't loaded here, so
+// resolve it manually for both vitest workspaces.
 export default defineConfig({
   plugins: [svelte()],
+  resolve: {
+    alias: {
+      $lib: fileURLToPath(new URL("./src/lib", import.meta.url)),
+    },
+  },
   test: {
     workspace: [
       {

@@ -2,12 +2,15 @@
   import { getTrackAudioUrl, fetchTrackLyrics, LyricsNotAvailableError, type Track } from '../api';
   import { parseLrc, type LrcLine } from '../utils/lrc';
   import LyricsDisplay from './LyricsDisplay.svelte';
+  import PlaybackControls from './PlaybackControls.svelte';
 
-  let { sessionId, track }: { sessionId: string; track: Track } = $props();
+  let { sessionId, track, onStop }: { sessionId: string; track: Track; onStop: () => void } =
+    $props();
 
   let currentTime = $state(0);
   let lines = $state<LrcLine[]>([]);
   let lyricsUnavailable = $state(false);
+  let audioEl: HTMLAudioElement | undefined = $state();
 
   $effect(() => {
     const trackId = track.id;
@@ -38,30 +41,44 @@
 
 <div class="track-player">
   <audio
-    controls
+    bind:this={audioEl}
     preload="metadata"
     bind:currentTime
     src={getTrackAudioUrl(sessionId, track.id)}
+    style="display:none"
   ></audio>
 
-  {#if lyricsUnavailable}
-    <p class="no-lyrics">No lyrics available for this track.</p>
-  {:else}
-    <LyricsDisplay {lines} {currentTime} />
-  {/if}
+  <div class="lyrics-area">
+    {#if lyricsUnavailable}
+      <p class="no-lyrics">No lyrics available for this track.</p>
+    {:else}
+      <LyricsDisplay {lines} {currentTime} />
+    {/if}
+  </div>
+
+  <PlaybackControls audio={audioEl} {onStop} />
 </div>
 
 <style>
   .track-player {
-    margin: 1.5rem 0;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    background: #fafafa;
   }
 
-  audio {
-    width: 100%;
+  .lyrics-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(4rem + env(safe-area-inset-top)) 1.5rem calc(5rem + env(safe-area-inset-bottom));
+    text-align: center;
   }
 
   .no-lyrics {
     color: #666;
-    margin: 1rem 0 0;
+    margin: 0;
   }
 </style>

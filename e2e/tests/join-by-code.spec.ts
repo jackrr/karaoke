@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { createSessionViaUI, joinSessionViaUI, waitForWebSocketConnected } from './helpers';
+import {
+  createSessionViaUI,
+  joinSessionViaUI,
+  waitForWebSocketConnected,
+  openSessionMenu,
+} from './helpers';
 
 test('joining by session code adds a second participant and shows real display names in chat', async ({
   browser,
@@ -14,6 +19,9 @@ test('joining by session code adds a second participant and shows real display n
   await createSessionViaUI(pageA);
   await waitForWebSocketConnected(pageA);
 
+  // SessionCard and chat now live inside the session menu.
+  await openSessionMenu(pageA);
+
   // Read the code straight from the rendered SessionCard header.
   const codeText = await pageA.locator('.session-card h2').innerText();
   const code = codeText.replace(/\D/g, '');
@@ -23,6 +31,7 @@ test('joining by session code adds a second participant and shows real display n
   await pageB.goto('/join');
   await joinSessionViaUI(pageB, code, 'Bob');
   await waitForWebSocketConnected(pageB);
+  await openSessionMenu(pageB);
 
   // Both contexts should now see 2 participants.
   await expect(pageA.locator('.participants li')).toHaveCount(2);
