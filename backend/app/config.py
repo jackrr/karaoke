@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     vocal_volume_fraction: float = 0.20
     demucs_model: str = "htdemucs"
+    demucs_device: str = "auto"
     youtube_cookies_file: str | None = None
     session_ttl_seconds: float = 6 * 60 * 60
     reaper_interval_seconds: float = 15 * 60

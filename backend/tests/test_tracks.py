@@ -82,7 +82,7 @@ def _fake_run_demucs_sync_factory(*, fail: bool = False):
     """Build a fake `run_demucs_sync` replacement that writes canned stem
     files instead of running real model inference."""
 
-    def _fake_run_demucs_sync(audio_path: Path, dest_dir: Path, model: str):
+    def _fake_run_demucs_sync(audio_path: Path, dest_dir: Path, model: str, device: str = "auto"):
         if fail:
             raise RuntimeError("simulated failure")
 

@@ -52,8 +52,38 @@ class SessionLeave(BaseModel):
     client_id: str
 
 
+logger = logging.getLogger(__name__)
+
+
+def _ensure_data_dirs() -> None:
+    if settings.database_path != ":memory:":
+        parent = Path(settings.database_path).expanduser().parent
+        if str(parent) not in ("", "."):
+            parent.mkdir(parents=True, exist_ok=True)
+    Path(settings.storage_dir).mkdir(parents=True, exist_ok=True)
+
+
+def _log_gpu_status() -> None:
+    try:
+        import torch
+
+        available = torch.cuda.is_available()
+        if available:
+            logger.info("CUDA available: True (device: %s)", torch.cuda.get_device_name(0))
+        else:
+            logger.info("CUDA available: False")
+            if settings.demucs_device == "auto":
+                logger.warning(
+                    "No GPU detected — demucs separation will run on CPU and be much slower"
+                )
+    except Exception as exc:
+        logger.info("Could not determine GPU availability: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _ensure_data_dirs()
+    _log_gpu_status()
     start_db()
     reaper_task = asyncio.create_task(
         run_reaper_loop(
@@ -221,6 +251,8 @@ async def leave_session(session_id: str, body: SessionLeave) -> None:
     await manager.broadcast_event(session_id, "member_left", {"client_id": body.client_id})
 
 
+# The container image mirrors the repo layout (/app/backend/app, /app/frontend/build),
+# so this relative path is load-bearing for deploys as well as local dev.
 _FRONTEND_STATIC_PATH = Path(__file__).resolve().parent.parent.parent / "frontend" / "build"
 if _FRONTEND_STATIC_PATH.exists():
     app.mount(

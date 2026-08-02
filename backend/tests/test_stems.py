@@ -74,3 +74,35 @@ def test_mix_length_mismatch_truncates_to_min(tmp_path) -> None:
 
     result, _ = sf.read(str(output_path), dtype="float32", always_2d=True)
     assert len(result) == 7
+
+
+def test_run_demucs_omits_device_flag_when_auto(tmp_path, monkeypatch) -> None:
+    captured = _capture_demucs_args(tmp_path, monkeypatch, device="auto")
+    assert "-d" not in captured
+
+
+def test_run_demucs_passes_device_flag_when_set(tmp_path, monkeypatch) -> None:
+    captured = _capture_demucs_args(tmp_path, monkeypatch, device="cuda")
+    assert captured[captured.index("-d") + 1] == "cuda"
+
+
+def _capture_demucs_args(tmp_path, monkeypatch, device: str) -> list[str]:
+    import demucs.separate
+
+    from app.stems import run_demucs_sync
+
+    audio_path = tmp_path / "song.wav"
+    _write_wav(audio_path, np.zeros((4, 2), dtype=np.float32))
+    dest_dir = tmp_path / "out"
+    stem_dir = dest_dir / "htdemucs" / "song"
+    stem_dir.mkdir(parents=True)
+    captured: list[str] = []
+
+    def fake_main(args):
+        captured.extend(args)
+        _write_wav(stem_dir / "vocals.wav", np.zeros((4, 2), dtype=np.float32))
+        _write_wav(stem_dir / "no_vocals.wav", np.zeros((4, 2), dtype=np.float32))
+
+    monkeypatch.setattr(demucs.separate, "main", fake_main)
+    run_demucs_sync(audio_path, dest_dir, "htdemucs", device)
+    return captured

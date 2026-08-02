@@ -415,7 +415,11 @@ async def process_track_download(
 
         logger.info("track %s: running demucs source separation", track_id)
         separation = await asyncio.to_thread(
-            run_demucs_sync, result.audio_path, dest_dir, settings.demucs_model
+            run_demucs_sync,
+            result.audio_path,
+            dest_dir,
+            settings.demucs_model,
+            settings.demucs_device,
         )
         mixed_path = dest_dir / "mixed.wav"
         logger.info("track %s: mixing attenuated-vocal remix", track_id)

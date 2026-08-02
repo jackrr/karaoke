@@ -65,7 +65,7 @@ def _fake_run_demucs_sync_factory():
     """Build a fake `run_demucs_sync` replacement that writes canned stem
     files instead of running real model inference."""
 
-    def _fake_run_demucs_sync(audio_path: Path, dest_dir: Path, model: str):
+    def _fake_run_demucs_sync(audio_path: Path, dest_dir: Path, model: str, device: str = "auto"):
         stem_dir = dest_dir / model / audio_path.stem
         stem_dir.mkdir(parents=True, exist_ok=True)
         vocals_path = stem_dir / "vocals.wav"

@@ -19,16 +19,21 @@ class SeparationResult:
     no_vocals_path: Path
 
 
-def run_demucs_sync(audio_path: Path, dest_dir: Path, model: str) -> SeparationResult:
+def run_demucs_sync(
+    audio_path: Path, dest_dir: Path, model: str, device: str = "auto"
+) -> SeparationResult:
     """Blocking two-stem separation of audio_path into vocals/no_vocals.
 
     Must be called off the event loop (e.g. via asyncio.to_thread).
+    `device` of "auto" omits `-d` so demucs picks CUDA when available.
     """
     import demucs.separate
 
-    demucs.separate.main(
-        ["--two-stems", "vocals", "-n", model, "-o", str(dest_dir), str(audio_path)]
-    )
+    args = ["--two-stems", "vocals", "-n", model]
+    if device != "auto":
+        args += ["-d", device]
+    args += ["-o", str(dest_dir), str(audio_path)]
+    demucs.separate.main(args)
 
     stem_dir = dest_dir / model / audio_path.stem
     vocals_path = stem_dir / "vocals.wav"
