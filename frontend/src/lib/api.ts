@@ -65,6 +65,8 @@ export async function getSession(id: string) {
       display_name: string;
       is_host: boolean;
     }>;
+    now_playing_track_id: string | null;
+    is_playing: boolean;
   }>(res);
 }
 
@@ -176,6 +178,34 @@ export async function removeTrack(sessionId: string, trackId: string) {
   if (!res.ok) throw new Error("Failed to remove track");
   const data = await json<{ tracks: Track[] }>(res);
   return data.tracks;
+}
+
+export async function updatePlaybackState(
+  sessionId: string,
+  trackId: string,
+  isPlaying: boolean,
+) {
+  const res = await fetch(`${API_BASE}sessions/${sessionId}/playback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: getClientId(),
+      track_id: trackId,
+      is_playing: isPlaying,
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to update playback state");
+  return json<{ track_id: string; is_playing: boolean }>(res);
+}
+
+export async function requestPlayTrack(sessionId: string, trackId: string) {
+  const res = await fetch(`${API_BASE}sessions/${sessionId}/playback/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client_id: getClientId(), track_id: trackId }),
+  });
+  if (!res.ok) throw new Error("Failed to request playback");
+  return json<{ track_id: string; requested_by_client_id: string }>(res);
 }
 
 // ---- WebSocket helpers ----

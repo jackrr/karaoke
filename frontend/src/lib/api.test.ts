@@ -8,6 +8,8 @@ import {
   submitYoutubeUrl,
   listTracks,
   reorderTracks,
+  updatePlaybackState,
+  requestPlayTrack,
   DuplicateTrackError,
 } from "./api";
 import { __resetIdentityForTests, getClientId } from "./identity";
@@ -142,7 +144,7 @@ describe("api helpers", () => {
       expect(result).toBeNull();
     });
 
-    it("returns session data including participants", async () => {
+    it("returns session data including participants and playback state", async () => {
       const sessionData = {
         id: "abc",
         code: "123456",
@@ -152,6 +154,8 @@ describe("api helpers", () => {
         participants: [
           { client_id: "host-1", display_name: "Alice", is_host: true },
         ],
+        now_playing_track_id: "t1",
+        is_playing: true,
       };
       vi.stubGlobal(
         "fetch",
@@ -375,6 +379,74 @@ describe("api helpers", () => {
       expect(url).toBe("/sessions/abc/leave");
       const body = JSON.parse(init.body);
       expect(typeof body.client_id).toBe("string");
+    });
+  });
+
+  describe("updatePlaybackState", () => {
+    it("posts client_id, track_id, is_playing and returns the result", async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ track_id: "t1", is_playing: true }),
+        }),
+      ) as any;
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await updatePlaybackState("abc", "t1", true);
+
+      expect(result).toEqual({ track_id: "t1", is_playing: true });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/sessions/abc/playback");
+      expect(init.method).toBe("POST");
+      const body = JSON.parse(init.body);
+      expect(body.track_id).toBe("t1");
+      expect(body.is_playing).toBe(true);
+      expect(typeof body.client_id).toBe("string");
+    });
+
+    it("throws when the request fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve({ ok: false, status: 403 })),
+      );
+      await expect(updatePlaybackState("abc", "t1", true)).rejects.toThrow();
+    });
+  });
+
+  describe("requestPlayTrack", () => {
+    it("posts client_id and track_id and returns the result", async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              track_id: "t1",
+              requested_by_client_id: "guest-1",
+            }),
+        }),
+      ) as any;
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await requestPlayTrack("abc", "t1");
+
+      expect(result).toEqual({
+        track_id: "t1",
+        requested_by_client_id: "guest-1",
+      });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/sessions/abc/playback/request");
+      expect(init.method).toBe("POST");
+      const body = JSON.parse(init.body);
+      expect(body.track_id).toBe("t1");
+      expect(typeof body.client_id).toBe("string");
+    });
+
+    it("throws when the request fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+      );
+      await expect(requestPlayTrack("abc", "t1")).rejects.toThrow();
     });
   });
 });

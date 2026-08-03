@@ -1,11 +1,23 @@
 <script lang="ts">
-  import { getTrackAudioUrl, fetchTrackLyrics, LyricsNotAvailableError, type Track } from '../api';
+  import {
+    getTrackAudioUrl,
+    fetchTrackLyrics,
+    LyricsNotAvailableError,
+    updatePlaybackState,
+    type Track,
+  } from '../api';
   import { parseLrc, type LrcLine } from '../utils/lrc';
   import LyricsDisplay from './LyricsDisplay.svelte';
   import PlaybackControls from './PlaybackControls.svelte';
 
   let { sessionId, track, onStop }: { sessionId: string; track: Track; onStop: () => void } =
     $props();
+
+  function handlePlayStateChange(isPlaying: boolean) {
+    updatePlaybackState(sessionId, track.id, isPlaying).catch(() => {
+      // Best-effort: a failed sync here shouldn't interrupt local playback.
+    });
+  }
 
   let currentTime = $state(0);
   let lines = $state<LrcLine[]>([]);
@@ -56,7 +68,7 @@
     {/if}
   </div>
 
-  <PlaybackControls audio={audioEl} {onStop} />
+  <PlaybackControls audio={audioEl} {onStop} onPlayStateChange={handlePlayStateChange} />
 </div>
 
 <style>

@@ -1,5 +1,13 @@
 <script lang="ts">
-  let { audio, onStop }: { audio: HTMLAudioElement | undefined; onStop: () => void } = $props();
+  let {
+    audio,
+    onStop,
+    onPlayStateChange,
+  }: {
+    audio: HTMLAudioElement | undefined;
+    onStop: () => void;
+    onPlayStateChange?: (isPlaying: boolean) => void;
+  } = $props();
 
   let playing = $state(false);
   let currentTime = $state(0);
@@ -13,8 +21,18 @@
     const syncTime = () => (currentTime = el.currentTime);
     const syncDuration = () => (duration = Number.isFinite(el.duration) ? el.duration : 0);
 
-    el.addEventListener('play', syncPlaying);
-    el.addEventListener('pause', syncPlaying);
+    // Notifies on any pause/play state change regardless of cause (button
+    // click, media keys, etc.) since it's driven by the audio element's own
+    // events rather than the button handler — but only for actual
+    // play/pause events, not the initial sync below, so mounting the
+    // player doesn't itself report a spurious "paused" state.
+    const notifyPlaying = () => {
+      syncPlaying();
+      onPlayStateChange?.(playing);
+    };
+
+    el.addEventListener('play', notifyPlaying);
+    el.addEventListener('pause', notifyPlaying);
     el.addEventListener('timeupdate', syncTime);
     el.addEventListener('loadedmetadata', syncDuration);
 
@@ -23,8 +41,8 @@
     syncDuration();
 
     return () => {
-      el.removeEventListener('play', syncPlaying);
-      el.removeEventListener('pause', syncPlaying);
+      el.removeEventListener('play', notifyPlaying);
+      el.removeEventListener('pause', notifyPlaying);
       el.removeEventListener('timeupdate', syncTime);
       el.removeEventListener('loadedmetadata', syncDuration);
     };

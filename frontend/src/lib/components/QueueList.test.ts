@@ -258,6 +258,79 @@ describe("QueueList", () => {
     expect(onPlay).toHaveBeenCalledWith(readyTrack);
   });
 
+  it("labels the play button 'Play' for the host and 'Play on host' otherwise", () => {
+    const readyTrack = makeTrack({
+      id: "t1",
+      title: "Song One",
+      status: "ready",
+    });
+
+    const { unmount: unmountHost } = render(QueueList, {
+      tracks: [readyTrack],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove: vi.fn(),
+      isHost: true,
+    });
+    expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
+    unmountHost();
+
+    render(QueueList, {
+      tracks: [readyTrack],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove: vi.fn(),
+      isHost: false,
+    });
+    expect(screen.getByRole("button", { name: "Play on host" })).toBeTruthy();
+  });
+
+  it("shows a Now Playing badge for the matching track reflecting isPlaying", () => {
+    const t1 = makeTrack({ id: "t1", title: "Song One", status: "ready" });
+    const t2 = makeTrack({ id: "t2", title: "Song Two", status: "ready" });
+
+    const { rerender } = render(QueueList, {
+      tracks: [t1, t2],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove: vi.fn(),
+      nowPlayingTrackId: "t1",
+      isPlaying: true,
+    });
+
+    expect(screen.getByLabelText("Now playing")).toBeTruthy();
+
+    rerender({
+      tracks: [t1, t2],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove: vi.fn(),
+      nowPlayingTrackId: "t1",
+      isPlaying: false,
+    });
+
+    expect(screen.getByLabelText("Now paused")).toBeTruthy();
+  });
+
+  it("does not show a Now Playing badge when no track matches nowPlayingTrackId", () => {
+    const t1 = makeTrack({ id: "t1", title: "Song One", status: "ready" });
+    render(QueueList, {
+      tracks: [t1],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove: vi.fn(),
+      nowPlayingTrackId: null,
+      isPlaying: false,
+    });
+
+    expect(screen.queryByText(/Now Playing/)).toBeNull();
+  });
+
   it("renders a Remove button per item regardless of status", () => {
     const readyTrack = makeTrack({
       id: "t1",

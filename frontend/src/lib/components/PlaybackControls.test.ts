@@ -101,6 +101,42 @@ describe("PlaybackControls", () => {
     expect(audio.currentTime).toBe(42);
   });
 
+  it("calls onPlayStateChange on play/pause events regardless of what triggered them", async () => {
+    const audio = makeFakeAudio();
+    const onPlayStateChange = vi.fn();
+    const { getByRole } = render(PlaybackControls, {
+      audio: asAudioElement(audio),
+      onStop: vi.fn(),
+      onPlayStateChange,
+    });
+
+    // Not called just from mounting/initial sync.
+    expect(onPlayStateChange).not.toHaveBeenCalled();
+
+    await fireEvent.click(getByRole("button", { name: "Play" }));
+    expect(onPlayStateChange).toHaveBeenLastCalledWith(true);
+
+    // Simulate an external cause (e.g. media keys) rather than the button.
+    audio.paused = true;
+    audio.dispatchEvent(new Event("pause"));
+    expect(onPlayStateChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("calls onPlayStateChange with false when Stop pauses the audio", async () => {
+    const audio = makeFakeAudio();
+    audio.paused = false;
+    const onPlayStateChange = vi.fn();
+    const { getByRole } = render(PlaybackControls, {
+      audio: asAudioElement(audio),
+      onStop: vi.fn(),
+      onPlayStateChange,
+    });
+
+    await fireEvent.click(getByRole("button", { name: "Stop" }));
+
+    expect(onPlayStateChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("calls onStop and pauses/resets the audio when Stop is clicked", async () => {
     const audio = makeFakeAudio();
     audio.paused = false;

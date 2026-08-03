@@ -16,7 +16,7 @@ from .config import settings
 from .database import close_db, get_db, start_db, touch_session
 from .reaper import run_reaper_loop
 from .tracks import tracks_router
-from .websocket_manager import ws_router, manager
+from .websocket_manager import _is_active_member, ws_router, manager
 
 # Uvicorn only configures its own "uvicorn.*" loggers, not the root logger,
 # so our app-level loggers (e.g. app.tracks) would otherwise have no handler
@@ -50,6 +50,17 @@ class SessionJoinResponse(BaseModel):
 
 class SessionLeave(BaseModel):
     client_id: str
+
+
+class PlaybackUpdate(BaseModel):
+    client_id: str
+    track_id: str
+    is_playing: bool
+
+
+class PlaybackRequest(BaseModel):
+    client_id: str
+    track_id: str
 
 
 logger = logging.getLogger(__name__)
@@ -205,13 +216,14 @@ async def join_session_by_code(body: SessionJoinByCode) -> SessionJoinResponse:
 async def get_session(session_id: str) -> dict:
     db = await get_db()
     async with db.execute(
-        "SELECT id, code, host_client_id, created_at FROM sessions WHERE id = ?",
+        "SELECT id, code, host_client_id, created_at, now_playing_track_id, is_playing "
+        "FROM sessions WHERE id = ?",
         (session_id,),
     ) as cursor:
         row = await cursor.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    sid, code, host_client_id, created_at = row
+    sid, code, host_client_id, created_at, now_playing_track_id, is_playing = row
 
     async with db.execute(
         "SELECT client_id, display_name FROM session_members "
@@ -235,6 +247,8 @@ async def get_session(session_id: str) -> dict:
         "created_at": created_at,
         "online": len(manager.active.get(session_id, {})),
         "participants": participants,
+        "now_playing_track_id": now_playing_track_id,
+        "is_playing": bool(is_playing),
     }
 
 
@@ -249,6 +263,81 @@ async def leave_session(session_id: str, body: SessionLeave) -> None:
     await touch_session(db, session_id)
     await db.commit()
     await manager.broadcast_event(session_id, "member_left", {"client_id": body.client_id})
+
+
+@app.post("/sessions/{session_id}/playback")
+async def update_playback_state(session_id: str, body: PlaybackUpdate) -> dict:
+    db = await get_db()
+    async with db.execute(
+        "SELECT host_client_id FROM sessions WHERE id = ?", (session_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    (host_client_id,) = row
+
+    if body.client_id != host_client_id:
+        raise HTTPException(status_code=403, detail="Only the host can update playback state")
+
+    if not await _is_active_member(session_id, body.client_id):
+        raise HTTPException(
+            status_code=403, detail="Not an active member of this session"
+        )
+
+    async with db.execute(
+        "SELECT status FROM tracks WHERE id = ? AND session_id = ?",
+        (body.track_id, session_id),
+    ) as cursor:
+        track_row = await cursor.fetchone()
+    if track_row is None:
+        raise HTTPException(status_code=404, detail="Track not found in this session")
+    (track_status,) = track_row
+    if track_status != "ready":
+        raise HTTPException(status_code=409, detail="Track is not ready for playback")
+
+    await db.execute(
+        "UPDATE sessions SET now_playing_track_id = ?, is_playing = ?, "
+        "playback_updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (body.track_id, int(body.is_playing), session_id),
+    )
+    await touch_session(db, session_id)
+    await db.commit()
+
+    await manager.broadcast_event(
+        session_id,
+        "playback_state_changed",
+        {"track_id": body.track_id, "is_playing": body.is_playing},
+    )
+    return {"track_id": body.track_id, "is_playing": body.is_playing}
+
+
+@app.post("/sessions/{session_id}/playback/request")
+async def request_playback(session_id: str, body: PlaybackRequest) -> dict:
+    db = await get_db()
+    async with db.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)) as cursor:
+        session_row = await cursor.fetchone()
+    if session_row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not await _is_active_member(session_id, body.client_id):
+        raise HTTPException(
+            status_code=403, detail="Not an active member of this session"
+        )
+
+    async with db.execute(
+        "SELECT 1 FROM tracks WHERE id = ? AND session_id = ?",
+        (body.track_id, session_id),
+    ) as cursor:
+        track_row = await cursor.fetchone()
+    if track_row is None:
+        raise HTTPException(status_code=404, detail="Track not found in this session")
+
+    await manager.broadcast_event(
+        session_id,
+        "play_requested",
+        {"track_id": body.track_id, "requested_by_client_id": body.client_id},
+    )
+    return {"track_id": body.track_id, "requested_by_client_id": body.client_id}
 
 
 # The container image mirrors the repo layout (/app/backend/app, /app/frontend/build),
