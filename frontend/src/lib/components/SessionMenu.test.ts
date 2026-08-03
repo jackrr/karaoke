@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, waitFor } from "@testing-library/svelte";
+import { tick } from "svelte";
 import SessionMenu from "./SessionMenu.svelte";
 import type { Track } from "../api";
 
@@ -103,20 +104,24 @@ describe("SessionMenu", () => {
     const { component, container, getByText } = setup();
     const dialog = container.querySelector("dialog")!;
     component.open();
+    await tick();
 
     await fireEvent.click(getByText("hi"));
 
     expect(dialog.hasAttribute("open")).toBe(true);
   });
 
-  it("renders Chat content", () => {
-    const { getByText } = setup();
+  it("renders Chat content", async () => {
+    const { component, getByText } = setup();
+    component.open();
+    await tick();
     expect(getByText("hi")).toBeTruthy();
   });
 
   it("fires onLeave when Leave Session is clicked", async () => {
     const { component, getByRole, onLeave } = setup();
     component.open();
+    await tick();
     await fireEvent.click(getByRole("button", { name: "Leave Session" }));
     expect(onLeave).toHaveBeenCalled();
   });
@@ -125,6 +130,7 @@ describe("SessionMenu", () => {
     const { component, getByPlaceholderText, getByRole, onSendMessage } =
       setup();
     component.open();
+    await tick();
     await fireEvent.input(getByPlaceholderText("Type a message..."), {
       target: { value: "hello" },
     });
@@ -138,6 +144,7 @@ describe("SessionMenu", () => {
       onSubmitTrack,
     });
     component.open();
+    await tick();
 
     await fireEvent.input(getByPlaceholderText("Paste a YouTube URL..."), {
       target: { value: "  https://youtube.com/watch?v=xyz  " },
@@ -149,11 +156,19 @@ describe("SessionMenu", () => {
     );
   });
 
-  it("renders the queue list given tracks", () => {
+  it("does not mount its queue list while closed", () => {
+    const { queryByText } = setup({
+      tracks: [makeTrack({ id: "t1", title: "Song One" })],
+    });
+    expect(queryByText("Song One")).toBeNull();
+  });
+
+  it("renders the queue list given tracks", async () => {
     const { component, getByText } = setup({
       tracks: [makeTrack({ id: "t1", title: "Song One" })],
     });
     component.open();
+    await tick();
 
     expect(getByText("Song One")).toBeTruthy();
   });
@@ -166,6 +181,7 @@ describe("SessionMenu", () => {
     });
     const dialog = container.querySelector("dialog")!;
     component.open();
+    await tick();
 
     await fireEvent.click(getByRole("button", { name: "Play" }));
 
@@ -181,6 +197,7 @@ describe("SessionMenu", () => {
     });
     const dialog = container.querySelector("dialog")!;
     component.open();
+    await tick();
 
     await fireEvent.click(getByRole("button", { name: "Remove" }));
 
@@ -195,6 +212,7 @@ describe("SessionMenu", () => {
     });
     const dialog = container.querySelector("dialog")!;
     component.open();
+    await tick();
 
     await fireEvent.input(getByPlaceholderText("Paste a YouTube URL..."), {
       target: { value: "https://youtube.com/watch?v=xyz" },
