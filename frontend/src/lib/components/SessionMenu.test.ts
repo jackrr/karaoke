@@ -1,17 +1,58 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent } from "@testing-library/svelte";
+import { render, fireEvent, waitFor } from "@testing-library/svelte";
 import SessionMenu from "./SessionMenu.svelte";
+import type { Track } from "../api";
+
+function makeTrack(overrides: Partial<Track> = {}): Track {
+  return {
+    id: "t1",
+    session_id: "s1",
+    source_url: "https://youtube.com/watch?v=xyz",
+    youtube_video_id: "xyz",
+    title: "A Song",
+    status: "pending",
+    error_message: null,
+    audio_path: null,
+    lyrics_path: null,
+    lyrics_source: null,
+    duration_seconds: null,
+    requested_by_client_id: "c1",
+    requested_by_display_name: null,
+    position: 0,
+    created_at: "now",
+    updated_at: "now",
+    ...overrides,
+  };
+}
 
 function setup(overrides: Partial<Parameters<typeof SessionMenu>[1]> = {}) {
   const onSendMessage = vi.fn();
   const onLeave = vi.fn();
+  const onSubmitTrack = vi.fn();
+  const onReorder = vi.fn();
+  const onPlay = vi.fn();
+  const onRemove = vi.fn();
   const result = render(SessionMenu, {
     messages: [{ sender: "Alice", text: "hi" }],
     onSendMessage,
     onLeave,
+    tracks: [],
+    participants: [],
+    onSubmitTrack,
+    onReorder,
+    onPlay,
+    onRemove,
     ...overrides,
   });
-  return { ...result, onSendMessage, onLeave };
+  return {
+    ...result,
+    onSendMessage,
+    onLeave,
+    onSubmitTrack,
+    onReorder,
+    onPlay,
+    onRemove,
+  };
 }
 
 describe("SessionMenu", () => {
@@ -89,5 +130,78 @@ describe("SessionMenu", () => {
     });
     await fireEvent.click(getByRole("button", { name: "Send" }));
     expect(onSendMessage).toHaveBeenCalledWith("hello");
+  });
+
+  it("renders the add-track form and submits the trimmed URL", async () => {
+    const onSubmitTrack = vi.fn(() => Promise.resolve(makeTrack()));
+    const { component, getByPlaceholderText, getByRole } = setup({
+      onSubmitTrack,
+    });
+    component.open();
+
+    await fireEvent.input(getByPlaceholderText("Paste a YouTube URL..."), {
+      target: { value: "  https://youtube.com/watch?v=xyz  " },
+    });
+    await fireEvent.click(getByRole("button", { name: /add track/i }));
+
+    expect(onSubmitTrack).toHaveBeenCalledWith(
+      "https://youtube.com/watch?v=xyz",
+    );
+  });
+
+  it("renders the queue list given tracks", () => {
+    const { component, getByText } = setup({
+      tracks: [makeTrack({ id: "t1", title: "Song One" })],
+    });
+    component.open();
+
+    expect(getByText("Song One")).toBeTruthy();
+  });
+
+  it("closes the dialog when Play is clicked from the queue list", async () => {
+    const onPlay = vi.fn();
+    const { component, container, getByRole } = setup({
+      tracks: [makeTrack({ id: "t1", title: "Song One", status: "ready" })],
+      onPlay,
+    });
+    const dialog = container.querySelector("dialog")!;
+    component.open();
+
+    await fireEvent.click(getByRole("button", { name: "Play" }));
+
+    expect(onPlay).toHaveBeenCalled();
+    expect(dialog.hasAttribute("open")).toBe(false);
+  });
+
+  it("closes the dialog when Remove is clicked from the queue list", async () => {
+    const onRemove = vi.fn(() => Promise.resolve());
+    const { component, container, getByRole } = setup({
+      tracks: [makeTrack({ id: "t1", title: "Song One" })],
+      onRemove,
+    });
+    const dialog = container.querySelector("dialog")!;
+    component.open();
+
+    await fireEvent.click(getByRole("button", { name: "Remove" }));
+
+    expect(onRemove).toHaveBeenCalled();
+    expect(dialog.hasAttribute("open")).toBe(false);
+  });
+
+  it("keeps the dialog open after a successful track submit", async () => {
+    const onSubmitTrack = vi.fn(() => Promise.resolve(makeTrack()));
+    const { component, container, getByPlaceholderText, getByRole } = setup({
+      onSubmitTrack,
+    });
+    const dialog = container.querySelector("dialog")!;
+    component.open();
+
+    await fireEvent.input(getByPlaceholderText("Paste a YouTube URL..."), {
+      target: { value: "https://youtube.com/watch?v=xyz" },
+    });
+    await fireEvent.click(getByRole("button", { name: /add track/i }));
+
+    await waitFor(() => expect(onSubmitTrack).toHaveBeenCalled());
+    expect(dialog.hasAttribute("open")).toBe(true);
   });
 });
