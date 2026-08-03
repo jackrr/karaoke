@@ -160,9 +160,10 @@ jobs:
       # a fork's branch.
       #
       # Loop safety: this workflow excludes e2e/screenshots/** and
-      # e2e/videos/** from its own trigger paths, so this commit doesn't
-      # re-trigger itself. The commit message also carries "[skip ci]" as a
-      # backstop.
+      # e2e/videos/** from its own trigger paths, and pushes made with the
+      # default GITHUB_TOKEN never trigger workflow runs anyway. Do NOT add
+      # "[skip ci]" here — squash-merging folds this message into the merge
+      # commit body, which then skips every workflow on the push to main.
       - name: Commit and push updated media
         id: commit_media
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -175,7 +176,7 @@ jobs:
             echo "No media changes to commit"
             echo "pushed=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "chore: update PR screenshots and reorder video preview [skip ci]"
+            git commit -m "chore: update PR screenshots and reorder video preview"
             git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
             echo "pushed=true" >> "$GITHUB_OUTPUT"
             echo "new_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
