@@ -177,24 +177,3 @@ force CPU explicitly, or `cuda` to fail loudly when the GPU is missing.
 
 Running without a GPU needs no special flags — drop `--gpus all` and it works,
 just slowly.
-
-### Reverse proxy
-
-Run exactly **one** worker (the image already does). The WebSocket connection
-registry and the SQLite connection are in-process singletons, so a second worker
-would see a different half of the state.
-
-A TLS-terminating reverse proxy must forward WebSocket upgrade headers for
-`/ws`, e.g. for nginx:
-
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:8765;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
