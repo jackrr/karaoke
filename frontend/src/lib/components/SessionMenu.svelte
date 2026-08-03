@@ -110,22 +110,26 @@
 
 <style>
   .session-menu {
+    /* Slide with `right`, not `transform` — a transformed ancestor becomes
+       the containing block for position:fixed descendants, which breaks
+       svelte-dnd-action's fixed-position drag ghost inside QueueList. */
+    --panel-width: min(90vw, 420px);
     position: fixed;
-    inset: 0 0 0 auto;
+    top: 0;
+    bottom: 0;
+    right: calc(-1 * var(--panel-width));
     margin: 0;
     height: 100%;
     max-height: 100%;
-    width: 90vw;
-    max-width: 420px;
+    width: var(--panel-width);
     border: none;
     padding: 1.5rem;
     box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
-    transform: translateX(100%);
-    transition: transform 0.25s ease;
+    transition: right 0.25s ease;
   }
 
   .session-menu[open] {
-    transform: translateX(0);
+    right: 0;
   }
 
   .session-menu::backdrop {
