@@ -8,6 +8,20 @@ set -e
 if [ "$(id -u)" = "0" ]; then
     mkdir -p /data
     chown app:app /data
+
+    # DATABASE_PATH/STORAGE_DIR can point at separately mounted volumes (see
+    # README's split-volume example) that arrive owned by whoever created
+    # them on the host, not just /data.
+    db_dir=$(dirname "${DATABASE_PATH:-/data/karaoke.db}")
+    if [ "$db_dir" != "/data" ]; then
+        mkdir -p "$db_dir"
+        chown app:app "$db_dir"
+    fi
+    if [ -n "$STORAGE_DIR" ] && [ "$STORAGE_DIR" != "/data/storage" ]; then
+        mkdir -p "$STORAGE_DIR"
+        chown app:app "$STORAGE_DIR"
+    fi
+
     exec setpriv --reuid=app --regid=app --init-groups "$@"
 fi
 

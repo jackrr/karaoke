@@ -63,6 +63,12 @@ there is no base-URL or CORS configuration to set.
 docker build -t karaoke .
 ```
 
+Or with Podman:
+
+```bash
+podman build -t karaoke .
+```
+
 CI builds `linux/amd64` and pushes to `ghcr.io/<owner>/karaoke` on every push to
 `main` and on `v*` tags (`.github/workflows/image.yml`).
 
@@ -76,6 +82,20 @@ docker run -d --name karaoke \
   --gpus all \
   -p 8765:8000 \
   -v /srv/karaoke:/data \
+  -v /var/lib/karaoke:/db \
+  -e DATABASE_PATH=/db/karaoke.db \
+  ghcr.io/<owner>/karaoke:latest
+```
+
+With Podman, swap `--gpus all` for the CDI device flag (see [GPU vs CPU](#gpu-vs-cpu)):
+
+```bash
+podman run -d --name karaoke \
+  --device nvidia.com/gpu=all \
+  -p 8765:8000 \
+  -v /srv/karaoke:/data \
+  -v /var/lib/karaoke:/db \
+  -e DATABASE_PATH=/db/karaoke.db \
   ghcr.io/<owner>/karaoke:latest
 ```
 
@@ -88,37 +108,8 @@ KARAOKE_DATA_DIR=/srv/karaoke docker compose up -d
 `compose.yaml` pulls the published image by default and only falls back to
 building from source, so the host needs a checkout of this repo only if you
 intend to build there. `KARAOKE_PORT` overrides the published port (default
-`8765`).
-
-### Storage
-
-Everything persistent lives under `/data` in the container:
-
-| Path                 | Contents                                  |
-| -------------------- | ----------------------------------------- |
-| `/data/karaoke.db`   | SQLite database                           |
-| `/data/storage`      | Downloaded audio, separated stems, lyrics |
-
-Mount any host directory there. The two paths are independently configurable, so
-the database can live outside the media volume if you'd rather:
-
-```bash
-docker run ... \
-  -v /srv/karaoke:/data \
-  -v /var/lib/karaoke:/db \
-  -e DATABASE_PATH=/db/karaoke.db \
-  ghcr.io/<owner>/karaoke:latest
-```
-
-Both directories are created on startup if they don't exist.
-
-The container starts as root only long enough to take ownership of `/data`
-(non-recursively), then drops to the unprivileged `app` user (UID 10001) for the
-server process itself — so a freshly created host directory works without any
-manual `chown`. Note that this does change the host directory's owner to UID
-10001. To avoid that, pass `--user "$(id -u):$(id -g)"`; the entrypoint then
-skips the ownership step entirely, and you are responsible for making the
-directory writable by that user.
+`8765`). Podman users can run the same file with `podman compose` (or
+`podman-compose`) in place of `docker compose`.
 
 ### Environment variables
 
