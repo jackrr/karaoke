@@ -77,25 +77,25 @@ PyTorch and its bundled NVIDIA CUDA libraries. That is a one-time pull per host.
 
 ### Run
 
-`-p 8765:8000` publishes the container's port so the server is reachable from
-the host — the app inside always listens on `8000`, and the host-side number
-is what you actually browse to.
-
 ```bash
 docker run -d --name karaoke \
   --gpus all \
   -p 8765:8000 \
   -v /srv/karaoke:/data \
+  -v /var/lib/karaoke:/db \
+  -e DATABASE_PATH=/db/karaoke.db \
   ghcr.io/<owner>/karaoke:latest
 ```
 
-With Podman, swap `--gpus all` for the CDI device flag (see [GPU vs CPU](#gpu-vs-cpu)) — the same `-p 8765:8000` port mapping still applies:
+With Podman, swap `--gpus all` for the CDI device flag (see [GPU vs CPU](#gpu-vs-cpu)):
 
 ```bash
 podman run -d --name karaoke \
   --device nvidia.com/gpu=all \
   -p 8765:8000 \
   -v /srv/karaoke:/data \
+  -v /var/lib/karaoke:/db \
+  -e DATABASE_PATH=/db/karaoke.db \
   ghcr.io/<owner>/karaoke:latest
 ```
 
@@ -110,40 +110,6 @@ building from source, so the host needs a checkout of this repo only if you
 intend to build there. `KARAOKE_PORT` overrides the published port (default
 `8765`). Podman users can run the same file with `podman compose` (or
 `podman-compose`) in place of `docker compose`.
-
-### Storage
-
-Everything persistent lives under `/data` in the container:
-
-| Path                 | Contents                                  |
-| -------------------- | ----------------------------------------- |
-| `/data/karaoke.db`   | SQLite database                           |
-| `/data/storage`      | Downloaded audio, separated stems, lyrics |
-
-Mount any host directory there. The two paths are independently configurable, so
-the database can live outside the media volume if you'd rather:
-
-```bash
-docker run -d --name karaoke \
-  --gpus all \
-  -p 8765:8000 \
-  -v /srv/karaoke:/data \
-  -v /var/lib/karaoke:/db \
-  -e DATABASE_PATH=/db/karaoke.db \
-  ghcr.io/<owner>/karaoke:latest
-```
-
-Both directories are created on startup if they don't exist.
-
-The container starts as root only long enough to take ownership of `/data`
-(non-recursively) — and, if `DATABASE_PATH` or `STORAGE_DIR` point at a
-separately mounted directory as in the example above, that directory too —
-then drops to the unprivileged `app` user (UID 10001) for the server process
-itself. So freshly created host directories work without any manual `chown`.
-Note that this does change those host directories' owner to UID 10001. To
-avoid that, pass `--user "$(id -u):$(id -g)"`; the entrypoint then skips the
-ownership step entirely, and you are responsible for making the directories
-writable by that user.
 
 ### Environment variables
 
