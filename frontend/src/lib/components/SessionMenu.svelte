@@ -1,19 +1,36 @@
 <script lang="ts">
   import Chat from './Chat.svelte';
+  import YoutubeDownloadForm from './YoutubeDownloadForm.svelte';
+  import QueueList from './QueueList.svelte';
+  import type { Track } from '../api';
 
   type ChatMessage = { sender: string; text: string; type?: string };
+  type Participant = { client_id: string; display_name: string };
 
   let {
     messages,
     onSendMessage,
     onLeave,
+    tracks,
+    participants,
+    onSubmitTrack,
+    onReorder,
+    onPlay,
+    onRemove,
   }: {
     messages: ChatMessage[];
     onSendMessage: (text: string) => void;
     onLeave: () => void;
+    tracks: Track[];
+    participants: Participant[];
+    onSubmitTrack: (url: string) => Promise<Track>;
+    onReorder: (orderedIds: string[]) => Promise<void>;
+    onPlay: (track: Track) => void;
+    onRemove: (track: Track) => Promise<void>;
   } = $props();
 
   let dialogEl: HTMLDialogElement | undefined = $state();
+  let isOpen = $state(false);
 
   // jsdom (used in component tests) doesn't implement showModal()/close(),
   // so fall back to toggling the `open` attribute directly there.
@@ -22,6 +39,7 @@
     if (!el) return;
     if (typeof el.showModal === 'function') el.showModal();
     else el.setAttribute('open', '');
+    isOpen = true;
   }
 
   export function close() {
@@ -29,6 +47,7 @@
     if (!el) return;
     if (typeof el.close === 'function') el.close();
     else el.removeAttribute('open');
+    isOpen = false;
   }
 
   function handleBackdropClick(e: MouseEvent) {
@@ -38,6 +57,23 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
   }
+
+  // Native <dialog> close (e.g. browser's own Escape handling) bypasses
+  // our close(), so keep isOpen in sync via the element's own event.
+  function handleNativeClose() {
+    isOpen = false;
+  }
+
+  // Playing or removing a track should return the user to the playback view.
+  function handlePlay(track: Track) {
+    onPlay(track);
+    close();
+  }
+
+  async function handleRemove(track: Track) {
+    await onRemove(track);
+    close();
+  }
 </script>
 
 <dialog
@@ -46,15 +82,30 @@
   aria-label="Session menu"
   onclick={handleBackdropClick}
   onkeydown={handleKeydown}
+  onclose={handleNativeClose}
 >
   <button class="close-btn" type="button" onclick={close} aria-label="Close menu">✕</button>
 
-  <div class="menu-content">
-    <Chat {messages} onSend={onSendMessage} />
-    <button class="btn btn-secondary leave-btn" type="button" onclick={onLeave}>
-      Leave Session
-    </button>
-  </div>
+  {#if isOpen}
+    <div class="menu-content">
+      <h3>Add a track</h3>
+      <YoutubeDownloadForm onSubmit={onSubmitTrack} />
+
+      <h3>Queue</h3>
+      <QueueList
+        {tracks}
+        {participants}
+        {onReorder}
+        onPlay={handlePlay}
+        onRemove={handleRemove}
+      />
+
+      <Chat {messages} onSend={onSendMessage} />
+      <button class="btn btn-secondary leave-btn" type="button" onclick={onLeave}>
+        Leave Session
+      </button>
+    </div>
+  {/if}
 </dialog>
 
 <style>
@@ -95,6 +146,10 @@
 
   .menu-content {
     margin-top: 2.5rem;
+  }
+
+  .menu-content h3 {
+    margin: 0 0 0.5rem;
   }
 
   .leave-btn {

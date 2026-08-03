@@ -176,6 +176,12 @@
     {messages}
     onSendMessage={handleSend}
     onLeave={handleLeave}
+    {tracks}
+    participants={session.participants}
+    onSubmitTrack={handleSubmitTrack}
+    onReorder={handleReorder}
+    onPlay={(t) => (nowPlaying = t)}
+    onRemove={handleRemove}
   />
 
   {#if nowPlaying}
