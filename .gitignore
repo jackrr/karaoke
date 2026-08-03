@@ -21,3 +21,7 @@ e2e/videos/*.webm
 
 # Local compose data volume
 karaoke-data/
+
+# Local docker run volume mounts (see README split-volume example)
+/data/
+/db/
