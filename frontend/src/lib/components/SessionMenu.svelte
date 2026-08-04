@@ -2,6 +2,7 @@
   import Chat from './Chat.svelte';
   import YoutubeDownloadForm from './YoutubeDownloadForm.svelte';
   import QueueList from './QueueList.svelte';
+  import SessionSettings from './SessionSettings.svelte';
   import type { Track } from '../api';
 
   type ChatMessage = { sender: string; text: string; type?: string };
@@ -20,6 +21,8 @@
     isHost = false,
     nowPlayingTrackId = null,
     isPlaying = false,
+    vocalVolumeFraction,
+    onUpdateVocalGain,
   }: {
     messages: ChatMessage[];
     onSendMessage: (text: string) => void;
@@ -33,6 +36,8 @@
     isHost?: boolean;
     nowPlayingTrackId?: string | null;
     isPlaying?: boolean;
+    vocalVolumeFraction: number;
+    onUpdateVocalGain: (value: number) => Promise<void>;
   } = $props();
 
   let dialogEl: HTMLDialogElement | undefined = $state();
@@ -108,6 +113,9 @@
         {nowPlayingTrackId}
         {isPlaying}
       />
+
+      <h3>Settings</h3>
+      <SessionSettings {vocalVolumeFraction} onUpdate={onUpdateVocalGain} />
 
       <Chat {messages} onSend={onSendMessage} />
       <button class="btn btn-secondary leave-btn" type="button" onclick={onLeave}>

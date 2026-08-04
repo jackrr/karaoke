@@ -14,13 +14,19 @@ export async function listSessions() {
   return json<{ count: number }>(res);
 }
 
-export async function createSession(displayName: string) {
+export async function createSession(
+  displayName: string,
+  vocalVolumeFraction?: number,
+) {
   const res = await fetch(`${API_BASE}sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       display_name: displayName,
       client_id: getClientId(),
+      ...(vocalVolumeFraction !== undefined && {
+        vocal_volume_fraction: vocalVolumeFraction,
+      }),
     }),
   });
   if (!res.ok) throw new Error("Failed to create session");
@@ -29,6 +35,7 @@ export async function createSession(displayName: string) {
     code: string;
     host_client_id: string;
     client_id: string;
+    vocal_volume_fraction: number;
   }>(res);
 }
 
@@ -67,7 +74,24 @@ export async function getSession(id: string) {
     }>;
     now_playing_track_id: string | null;
     is_playing: boolean;
+    vocal_volume_fraction: number;
   }>(res);
+}
+
+export async function updateSessionSettings(
+  sessionId: string,
+  vocalVolumeFraction: number,
+) {
+  const res = await fetch(`${API_BASE}sessions/${sessionId}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: getClientId(),
+      vocal_volume_fraction: vocalVolumeFraction,
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to update session settings");
+  return json<{ vocal_volume_fraction: number }>(res);
 }
 
 export async function leaveSession(id: string) {

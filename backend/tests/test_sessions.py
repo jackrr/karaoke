@@ -3,6 +3,7 @@ import re
 from httpx import AsyncClient
 
 import app.main as main_module
+from app.config import settings
 from app.main import _upsert_member
 from app.database import get_db
 
@@ -232,3 +233,80 @@ async def test_rejoin_after_leave_clears_left_at(async_client: AsyncClient) -> N
     assert guest_entries == [
         {"client_id": guest_client_id, "display_name": "Guest Again", "is_host": False}
     ]
+
+
+async def test_create_session_defaults_vocal_volume_fraction(async_client: AsyncClient) -> None:
+    data = await _create_session(async_client)
+    assert data["vocal_volume_fraction"] == settings.vocal_volume_fraction
+
+    resp = await async_client.get(f"/sessions/{data['id']}")
+    assert resp.json()["vocal_volume_fraction"] == settings.vocal_volume_fraction
+
+
+async def test_create_session_with_custom_vocal_volume_fraction(async_client: AsyncClient) -> None:
+    resp = await async_client.post(
+        "/sessions", json={"display_name": "Host", "vocal_volume_fraction": 0.5}
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["vocal_volume_fraction"] == 0.5
+
+    resp = await async_client.get(f"/sessions/{data['id']}")
+    assert resp.json()["vocal_volume_fraction"] == 0.5
+
+
+async def test_get_session_settings_returns_current_value(async_client: AsyncClient) -> None:
+    created = await _create_session(async_client)
+    resp = await async_client.get(f"/sessions/{created['id']}/settings")
+    assert resp.status_code == 200
+    assert resp.json() == {"vocal_volume_fraction": settings.vocal_volume_fraction}
+
+
+async def test_get_session_settings_unknown_session_404(async_client: AsyncClient) -> None:
+    resp = await async_client.get("/sessions/nonexistent/settings")
+    assert resp.status_code == 404
+
+
+async def test_put_session_settings_updates_value(async_client: AsyncClient) -> None:
+    created = await _create_session(async_client)
+    resp = await async_client.put(
+        f"/sessions/{created['id']}/settings",
+        json={"client_id": created["client_id"], "vocal_volume_fraction": 0.75},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"vocal_volume_fraction": 0.75}
+
+    get_resp = await async_client.get(f"/sessions/{created['id']}/settings")
+    assert get_resp.json() == {"vocal_volume_fraction": 0.75}
+
+
+async def test_put_session_settings_non_member_403(async_client: AsyncClient) -> None:
+    created = await _create_session(async_client)
+    resp = await async_client.put(
+        f"/sessions/{created['id']}/settings",
+        json={"client_id": "not-a-member", "vocal_volume_fraction": 0.75},
+    )
+    assert resp.status_code == 403
+
+
+async def test_put_session_settings_out_of_range_422(async_client: AsyncClient) -> None:
+    created = await _create_session(async_client)
+    resp = await async_client.put(
+        f"/sessions/{created['id']}/settings",
+        json={"client_id": created["client_id"], "vocal_volume_fraction": 1.5},
+    )
+    assert resp.status_code == 422
+
+    resp = await async_client.put(
+        f"/sessions/{created['id']}/settings",
+        json={"client_id": created["client_id"], "vocal_volume_fraction": -0.1},
+    )
+    assert resp.status_code == 422
+
+
+async def test_put_session_settings_unknown_session_404(async_client: AsyncClient) -> None:
+    resp = await async_client.put(
+        "/sessions/nonexistent/settings",
+        json={"client_id": "c1", "vocal_volume_fraction": 0.5},
+    )
+    assert resp.status_code == 404

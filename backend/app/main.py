@@ -10,12 +10,12 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .config import settings
 from .database import close_db, get_db, start_db, touch_session
 from .reaper import run_reaper_loop
-from .tracks import tracks_router
+from .tracks import _session_exists, tracks_router
 from .websocket_manager import _is_active_member, ws_router, manager
 
 # Uvicorn only configures its own "uvicorn.*" loggers, not the root logger,
@@ -27,6 +27,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(name)s: %(mess
 class SessionCreate(BaseModel):
     display_name: str
     client_id: str | None = None
+    vocal_volume_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class SessionCreateResponse(BaseModel):
@@ -34,6 +35,12 @@ class SessionCreateResponse(BaseModel):
     code: str
     host_client_id: str
     client_id: str
+    vocal_volume_fraction: float
+
+
+class SessionSettingsUpdate(BaseModel):
+    client_id: str
+    vocal_volume_fraction: float = Field(ge=0.0, le=1.0)
 
 
 class SessionJoinByCode(BaseModel):
@@ -149,13 +156,19 @@ async def create_session(body: SessionCreate) -> SessionCreateResponse:
     db = await get_db()
     sid = str(uuid4())
     host_client_id = body.client_id or str(uuid4())
+    fraction = (
+        body.vocal_volume_fraction
+        if body.vocal_volume_fraction is not None
+        else settings.vocal_volume_fraction
+    )
 
     for _ in range(10):
         code = await _generate_unique_code(db)
         try:
             await db.execute(
-                "INSERT INTO sessions (id, code, host_client_id) VALUES (?, ?, ?)",
-                (sid, code, host_client_id),
+                "INSERT INTO sessions (id, code, host_client_id, vocal_volume_fraction) "
+                "VALUES (?, ?, ?, ?)",
+                (sid, code, host_client_id, fraction),
             )
         except sqlite3.IntegrityError:
             # Another concurrent create grabbed this code between our
@@ -173,6 +186,7 @@ async def create_session(body: SessionCreate) -> SessionCreateResponse:
         code=code,
         host_client_id=host_client_id,
         client_id=host_client_id,
+        vocal_volume_fraction=fraction,
     )
 
 
@@ -216,14 +230,23 @@ async def join_session_by_code(body: SessionJoinByCode) -> SessionJoinResponse:
 async def get_session(session_id: str) -> dict:
     db = await get_db()
     async with db.execute(
-        "SELECT id, code, host_client_id, created_at, now_playing_track_id, is_playing "
+        "SELECT id, code, host_client_id, created_at, now_playing_track_id, is_playing, "
+        "vocal_volume_fraction "
         "FROM sessions WHERE id = ?",
         (session_id,),
     ) as cursor:
         row = await cursor.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
-    sid, code, host_client_id, created_at, now_playing_track_id, is_playing = row
+    (
+        sid,
+        code,
+        host_client_id,
+        created_at,
+        now_playing_track_id,
+        is_playing,
+        vocal_volume_fraction,
+    ) = row
 
     async with db.execute(
         "SELECT client_id, display_name FROM session_members "
@@ -249,7 +272,57 @@ async def get_session(session_id: str) -> dict:
         "participants": participants,
         "now_playing_track_id": now_playing_track_id,
         "is_playing": bool(is_playing),
+        "vocal_volume_fraction": (
+            vocal_volume_fraction
+            if vocal_volume_fraction is not None
+            else settings.vocal_volume_fraction
+        ),
     }
+
+
+@app.get("/sessions/{session_id}/settings")
+async def get_session_settings(session_id: str) -> dict:
+    db = await get_db()
+    async with db.execute(
+        "SELECT vocal_volume_fraction FROM sessions WHERE id = ?", (session_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    (vocal_volume_fraction,) = row
+    return {
+        "vocal_volume_fraction": (
+            vocal_volume_fraction
+            if vocal_volume_fraction is not None
+            else settings.vocal_volume_fraction
+        )
+    }
+
+
+@app.put("/sessions/{session_id}/settings")
+async def update_session_settings(session_id: str, body: SessionSettingsUpdate) -> dict:
+    db = await get_db()
+    if not await _session_exists(db, session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not await _is_active_member(session_id, body.client_id):
+        raise HTTPException(
+            status_code=403, detail="Not an active member of this session"
+        )
+
+    await db.execute(
+        "UPDATE sessions SET vocal_volume_fraction = ? WHERE id = ?",
+        (body.vocal_volume_fraction, session_id),
+    )
+    await touch_session(db, session_id)
+    await db.commit()
+
+    await manager.broadcast_event(
+        session_id,
+        "session_settings_updated",
+        {"vocal_volume_fraction": body.vocal_volume_fraction},
+    )
+    return {"vocal_volume_fraction": body.vocal_volume_fraction}
 
 
 @app.post("/sessions/{session_id}/leave", status_code=204)

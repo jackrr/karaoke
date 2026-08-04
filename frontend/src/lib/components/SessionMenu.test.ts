@@ -33,6 +33,7 @@ function setup(overrides: Partial<Parameters<typeof SessionMenu>[1]> = {}) {
   const onReorder = vi.fn();
   const onPlay = vi.fn();
   const onRemove = vi.fn();
+  const onUpdateVocalGain = vi.fn(() => Promise.resolve());
   const result = render(SessionMenu, {
     messages: [{ sender: "Alice", text: "hi" }],
     onSendMessage,
@@ -43,6 +44,8 @@ function setup(overrides: Partial<Parameters<typeof SessionMenu>[1]> = {}) {
     onReorder,
     onPlay,
     onRemove,
+    vocalVolumeFraction: 0.2,
+    onUpdateVocalGain,
     ...overrides,
   });
   return {
@@ -53,6 +56,7 @@ function setup(overrides: Partial<Parameters<typeof SessionMenu>[1]> = {}) {
     onReorder,
     onPlay,
     onRemove,
+    onUpdateVocalGain,
   };
 }
 
@@ -222,5 +226,31 @@ describe("SessionMenu", () => {
 
     await waitFor(() => expect(onSubmitTrack).toHaveBeenCalled());
     expect(dialog.hasAttribute("open")).toBe(true);
+  });
+
+  it("renders the Settings section with the current gain value", async () => {
+    const { component, getByText, getByLabelText } = setup({
+      vocalVolumeFraction: 0.42,
+    });
+    component.open();
+    await tick();
+
+    expect(getByText(/background vocal gain.*0\.42/i)).toBeTruthy();
+    expect(getByLabelText(/background vocal gain/i)).toBeTruthy();
+  });
+
+  it("fires onUpdateVocalGain with the slider value when Save is clicked", async () => {
+    const { component, getByLabelText, getByRole, onUpdateVocalGain } = setup({
+      vocalVolumeFraction: 0.2,
+    });
+    component.open();
+    await tick();
+
+    await fireEvent.input(getByLabelText(/background vocal gain/i), {
+      target: { value: "0.75" },
+    });
+    await fireEvent.click(getByRole("button", { name: "Save" }));
+
+    expect(onUpdateVocalGain).toHaveBeenCalledWith(0.75);
   });
 });

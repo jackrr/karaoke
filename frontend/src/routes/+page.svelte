@@ -10,6 +10,7 @@
   let error = $state<string | null>(null);
   let sessionCount = $state<number | null>(null);
   let displayName = $state(getDisplayName());
+  let vocalVolumeFraction = $state(0.2);
 
   onMount(async () => {
     const redirectError = page.url.searchParams.get('error');
@@ -34,7 +35,7 @@
     error = null;
     try {
       const trimmedName = displayName.trim();
-      const result = await createSession(trimmedName);
+      const result = await createSession(trimmedName, vocalVolumeFraction);
       setDisplayName(trimmedName);
       await goto(`/session/${result.id}`);
     } catch {
@@ -71,6 +72,21 @@
     {loading ? 'Creating...' : 'Create Session'}
   </button>
 </form>
+
+<details class="advanced">
+  <summary>Advanced</summary>
+  <label for="vocal-gain">
+    Background vocal gain: {vocalVolumeFraction.toFixed(2)}
+  </label>
+  <input
+    id="vocal-gain"
+    type="range"
+    min="0"
+    max="1"
+    step="0.01"
+    bind:value={vocalVolumeFraction}
+  />
+</details>
 
 <p class="join-link">Have a code? <a href="/join">Join a session</a> — ask the host for their 6-digit session code.</p>
 
@@ -141,5 +157,19 @@
 
   .join-link a {
     color: #4a90d9;
+  }
+
+  .advanced {
+    max-width: 320px;
+    margin: 1.5rem auto 0;
+  }
+
+  .advanced label {
+    display: block;
+    margin: 0.5rem 0;
+  }
+
+  .advanced input[type='range'] {
+    width: 100%;
   }
 </style>

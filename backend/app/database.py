@@ -55,6 +55,16 @@ async def _ensure_playback_columns(conn: aiosqlite.Connection) -> None:
         pass
 
 
+async def _ensure_vocal_volume_fraction_column(conn: aiosqlite.Connection) -> None:
+    """Add `vocal_volume_fraction` to a `sessions` table created before this
+    column existed. See `_ensure_last_active_at_column` for why this is
+    needed alongside the `CREATE TABLE IF NOT EXISTS` above."""
+    try:
+        await conn.execute("ALTER TABLE sessions ADD COLUMN vocal_volume_fraction REAL")
+    except sqlite3.OperationalError:
+        pass
+
+
 async def touch_session(conn: aiosqlite.Connection, session_id: str) -> None:
     """Bump a session's `last_active_at` to now.
 
@@ -79,12 +89,14 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
             last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             now_playing_track_id TEXT,
             is_playing INTEGER NOT NULL DEFAULT 0,
-            playback_updated_at TIMESTAMP
+            playback_updated_at TIMESTAMP,
+            vocal_volume_fraction REAL
         )
         """
     )
     await _ensure_last_active_at_column(conn)
     await _ensure_playback_columns(conn)
+    await _ensure_vocal_volume_fraction_column(conn)
     await conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_sessions_last_active_at

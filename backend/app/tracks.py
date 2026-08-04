@@ -452,13 +452,23 @@ async def process_track_download(
             settings.demucs_device,
         )
         mixed_path = dest_dir / "mixed.wav"
+        async with db.execute(
+            "SELECT vocal_volume_fraction FROM sessions WHERE id = ?", (session_id,)
+        ) as cursor:
+            session_row = await cursor.fetchone()
+        # Fall back to the global default for pre-migration rows (NULL) or a reaped session.
+        vocal_volume_fraction = (
+            session_row[0]
+            if session_row is not None and session_row[0] is not None
+            else settings.vocal_volume_fraction
+        )
         logger.info("track %s: mixing attenuated-vocal remix", track_id)
         await asyncio.to_thread(
             mix_with_attenuated_vocals,
             separation.vocals_path,
             separation.no_vocals_path,
             mixed_path,
-            settings.vocal_volume_fraction,
+            vocal_volume_fraction,
         )
 
         await _update_track_or_abort(
