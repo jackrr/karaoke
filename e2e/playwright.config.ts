@@ -18,6 +18,10 @@ export const baseConfig: PlaywrightTestConfig = {
       port: 8765,
       timeout: 30_000,
       name: "app",
+      // Stub the yt-dlp/demucs pipeline so tracks reach "ready" instantly
+      // with placeholder audio — tests need real playback state (ready
+      // tracks, audio elements), not real downloads/separation.
+      env: { ...process.env, SKIP_TRACK_DOWNLOAD: "1" },
     },
   ],
 

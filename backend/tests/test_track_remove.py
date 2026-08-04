@@ -194,6 +194,69 @@ async def test_remove_mid_flight_download_leaves_no_orphaned_files(
     assert not track_dir.exists()
 
 
+async def test_remove_now_playing_track_clears_playback_state(
+    async_client: AsyncClient, monkeypatch
+) -> None:
+    _patch_pipeline(monkeypatch)
+    session = await _create_session(async_client)
+    track = await _add_track(async_client, session, session["client_id"])
+    from tests.test_tracks import _wait_for_status
+
+    ready = await _wait_for_status(async_client, session["id"], {"ready"})
+
+    resp = await async_client.post(
+        f"/sessions/{session['id']}/playback",
+        json={"client_id": session["client_id"], "track_id": ready["id"], "is_playing": True},
+    )
+    assert resp.status_code == 200
+
+    resp = await async_client.delete(
+        f"/sessions/{session['id']}/tracks/{track['id']}",
+        params={"client_id": session["client_id"]},
+    )
+    assert resp.status_code == 200
+
+    get_resp = await async_client.get(f"/sessions/{session['id']}")
+    data = get_resp.json()
+    assert data["now_playing_track_id"] is None
+    assert data["is_playing"] is False
+
+
+async def test_remove_other_track_leaves_now_playing_intact(
+    async_client: AsyncClient, monkeypatch
+) -> None:
+    _patch_pipeline(monkeypatch)
+    session = await _create_session(async_client)
+    from tests.test_tracks import _wait_for_status
+
+    await _add_track(
+        async_client, session, session["client_id"],
+        "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+    )
+    ready1 = await _wait_for_status(async_client, session["id"], {"ready"})
+    track2 = await _add_track(
+        async_client, session, session["client_id"],
+        "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+    )
+
+    resp = await async_client.post(
+        f"/sessions/{session['id']}/playback",
+        json={"client_id": session["client_id"], "track_id": ready1["id"], "is_playing": True},
+    )
+    assert resp.status_code == 200
+
+    resp = await async_client.delete(
+        f"/sessions/{session['id']}/tracks/{track2['id']}",
+        params={"client_id": session["client_id"]},
+    )
+    assert resp.status_code == 200
+
+    get_resp = await async_client.get(f"/sessions/{session['id']}")
+    data = get_resp.json()
+    assert data["now_playing_track_id"] == ready1["id"]
+    assert data["is_playing"] is True
+
+
 def test_websocket_broadcasts_track_removed(client: WsTestClient, monkeypatch) -> None:
     _patch_pipeline(monkeypatch)
 

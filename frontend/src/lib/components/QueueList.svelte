@@ -5,12 +5,24 @@
 
   type Participant = { client_id: string; display_name: string };
 
-  let { tracks = [], participants = [], onReorder, onPlay, onRemove }: {
+  let {
+    tracks = [],
+    participants = [],
+    onReorder,
+    onPlay,
+    onRemove,
+    isHost = false,
+    nowPlayingTrackId = null,
+    isPlaying = false,
+  }: {
     tracks: Track[];
     participants: Participant[];
     onReorder: (orderedIds: string[]) => Promise<void>;
     onPlay: (track: Track) => void;
     onRemove: (track: Track) => Promise<void>;
+    isHost?: boolean;
+    nowPlayingTrackId?: string | null;
+    isPlaying?: boolean;
   } = $props();
 
   let items = $state<Track[]>(untrack(() => [...tracks]));
@@ -117,12 +129,17 @@
             {STATUS_LABELS[track.status] ?? track.status}
           </span>
           <span class="uploader">Added by {uploaderName(track)}</span>
+          {#if track.id === nowPlayingTrackId}
+            <span class="now-playing" aria-label={isPlaying ? 'Now playing' : 'Now paused'}>
+              {isPlaying ? '▶' : '⏸'} Now Playing
+            </span>
+          {/if}
           {#if track.status === 'error' && track.error_message}
             <span class="error-message">{track.error_message}</span>
           {/if}
           {#if track.status === 'ready'}
             <button class="btn btn-play" type="button" onclick={() => onPlay(track)}>
-              Play
+              {isHost ? 'Play' : 'Play on host'}
             </button>
           {/if}
           <button class="btn btn-remove" type="button" onclick={() => handleRemove(track)}>
@@ -185,6 +202,12 @@
 
   .status-ready {
     color: #16a34a;
+  }
+
+  .now-playing {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #1a1a1a;
   }
 
   .error-message {

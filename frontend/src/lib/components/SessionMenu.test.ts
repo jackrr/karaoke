@@ -178,6 +178,7 @@ describe("SessionMenu", () => {
     const { component, container, getByRole } = setup({
       tracks: [makeTrack({ id: "t1", title: "Song One", status: "ready" })],
       onPlay,
+      isHost: true,
     });
     const dialog = container.querySelector("dialog")!;
     component.open();

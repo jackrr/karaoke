@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, removeTrack, type Track } from '$lib/api';
-  import { getDisplayName } from '$lib/identity';
+  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, removeTrack, updatePlaybackState, requestPlayTrack, type Track } from '$lib/api';
+  import { getDisplayName, getClientId } from '$lib/identity';
   import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
   import TrackPlayer from '$lib/components/TrackPlayer.svelte';
   import QueueList from '$lib/components/QueueList.svelte';
@@ -25,6 +25,9 @@
   let messages = $state<Array<{ sender: string; text: string; type?: string }>>([]);
   let tracks = $state<Track[]>([]);
   let nowPlaying = $state<Track | null>(null);
+  let nowPlayingTrackId = $state<string | null>(null);
+  let isPlaying = $state(false);
+  let isHost = $derived(session?.host_client_id === getClientId());
   // Bumped every time `tracks` is replaced wholesale (queue_reordered
   // broadcasts, our own optimistic reorder). Svelte 5's `$state` wraps
   // assigned arrays in a new proxy on every write, so comparing an old array
@@ -49,6 +52,8 @@
       return;
     }
     session = data;
+    nowPlayingTrackId = data.now_playing_track_id;
+    isPlaying = data.is_playing;
     loading = false;
     tracks = await listTracks(sessionId);
 
@@ -90,12 +95,26 @@
           if (nowPlaying && !tracks.some((t) => t.id === nowPlaying!.id)) {
             nowPlaying = null;
           }
+        } else if (typed.type === 'playback_state_changed') {
+          nowPlayingTrackId = typed.data.track_id ?? null;
+          isPlaying = typed.data.is_playing ?? false;
+        } else if (typed.type === 'play_requested') {
+          // Only the host acts on this — it's a hint that a guest wants a
+          // track played. Drive it through the same path as the host
+          // clicking Play themselves, so it both opens the local player and
+          // syncs the new now-playing state to everyone else.
+          if (isHost) {
+            const requested = tracks.find((t) => t.id === typed.data.track_id);
+            if (requested) handlePlay(requested);
+          }
         } else if (typed.type === 'session_ended') {
           // The server reaped this session (e.g. it sat idle past the TTL)
           // out from under us. Show a clear message instead of leaving the
           // UI looking connected to a session that no longer exists.
           sessionEnded = true;
           nowPlaying = null;
+          nowPlayingTrackId = null;
+          isPlaying = false;
         }
       },
     });
@@ -103,6 +122,23 @@
 
   async function handleSubmitTrack(url: string) {
     return submitYoutubeUrl(sessionId, url);
+  }
+
+  function startPlayingLocally(track: Track) {
+    nowPlaying = track;
+  }
+
+  function handlePlay(track: Track) {
+    if (isHost) {
+      startPlayingLocally(track);
+      updatePlaybackState(sessionId, track.id, true).catch(() => {
+        // Best-effort: a failed sync here shouldn't block local playback.
+      });
+    } else {
+      requestPlayTrack(sessionId, track.id).catch(() => {
+        // Best-effort: the host may just be offline; nothing more to do here.
+      });
+    }
   }
 
   async function handleReorder(orderedIds: string[]) {
@@ -180,12 +216,17 @@
     participants={session.participants}
     onSubmitTrack={handleSubmitTrack}
     onReorder={handleReorder}
-    onPlay={(t) => (nowPlaying = t)}
+    onPlay={handlePlay}
     onRemove={handleRemove}
+    {isHost}
+    {nowPlayingTrackId}
+    {isPlaying}
   />
 
   {#if nowPlaying}
-    <TrackPlayer {sessionId} track={nowPlaying} onStop={() => (nowPlaying = null)} />
+    {#key nowPlaying.id}
+      <TrackPlayer {sessionId} track={nowPlaying} onStop={() => (nowPlaying = null)} />
+    {/key}
   {:else}
     {#if sessionEnded}
       <p class="session-ended">This session has ended (it was idle too long). Start a new one from the home page.</p>
@@ -202,8 +243,11 @@
         {tracks}
         participants={session.participants}
         onReorder={handleReorder}
-        onPlay={(t) => (nowPlaying = t)}
+        onPlay={handlePlay}
         onRemove={handleRemove}
+        {isHost}
+        {nowPlayingTrackId}
+        {isPlaying}
       />
     {/if}
   {/if}

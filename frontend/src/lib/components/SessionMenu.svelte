@@ -17,6 +17,9 @@
     onReorder,
     onPlay,
     onRemove,
+    isHost = false,
+    nowPlayingTrackId = null,
+    isPlaying = false,
   }: {
     messages: ChatMessage[];
     onSendMessage: (text: string) => void;
@@ -27,6 +30,9 @@
     onReorder: (orderedIds: string[]) => Promise<void>;
     onPlay: (track: Track) => void;
     onRemove: (track: Track) => Promise<void>;
+    isHost?: boolean;
+    nowPlayingTrackId?: string | null;
+    isPlaying?: boolean;
   } = $props();
 
   let dialogEl: HTMLDialogElement | undefined = $state();
@@ -98,6 +104,9 @@
         {onReorder}
         onPlay={handlePlay}
         onRemove={handleRemove}
+        {isHost}
+        {nowPlayingTrackId}
+        {isPlaying}
       />
 
       <Chat {messages} onSend={onSendMessage} />

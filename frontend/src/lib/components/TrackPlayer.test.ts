@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, waitFor } from "@testing-library/svelte";
 import TrackPlayer from "./TrackPlayer.svelte";
+import * as api from "../api";
 import type { Track } from "../api";
 
 function makeTrack(overrides: Partial<Track> = {}): Track {
@@ -49,6 +50,36 @@ describe("TrackPlayer", () => {
 
     expect(getByRole("button", { name: "Play" })).toBeTruthy();
     expect(getByRole("button", { name: "Stop" })).toBeTruthy();
+  });
+
+  it("calls updatePlaybackState with the track id when playback state changes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+    );
+    const updateSpy = vi
+      .spyOn(api, "updatePlaybackState")
+      .mockResolvedValue({ track_id: "t1", is_playing: true });
+
+    const { container } = render(TrackPlayer, {
+      sessionId: "s1",
+      track: makeTrack({ id: "t1" }),
+      onStop: vi.fn(),
+    });
+
+    const audio = container.querySelector("audio")!;
+    // Dispatch the audio element's own 'play' event directly rather than
+    // calling audio.play() (unimplemented in jsdom), matching how
+    // PlaybackControls listens for state changes regardless of cause.
+    Object.defineProperty(audio, "paused", {
+      value: false,
+      configurable: true,
+    });
+    audio.dispatchEvent(new Event("play"));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith("s1", "t1", true),
+    );
   });
 
   it("shows a message when lyrics are unavailable", async () => {

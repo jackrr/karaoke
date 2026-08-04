@@ -35,6 +35,26 @@ async def _ensure_last_active_at_column(conn: aiosqlite.Connection) -> None:
         pass
 
 
+async def _ensure_playback_columns(conn: aiosqlite.Connection) -> None:
+    """Add the now-playing/playback-state columns to a `sessions` table
+    created before they existed. Same backfill pattern (and same guard) as
+    `_ensure_last_active_at_column` above."""
+    try:
+        await conn.execute("ALTER TABLE sessions ADD COLUMN now_playing_track_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        await conn.execute(
+            "ALTER TABLE sessions ADD COLUMN is_playing INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError:
+        pass
+    try:
+        await conn.execute("ALTER TABLE sessions ADD COLUMN playback_updated_at TIMESTAMP")
+    except sqlite3.OperationalError:
+        pass
+
+
 async def touch_session(conn: aiosqlite.Connection, session_id: str) -> None:
     """Bump a session's `last_active_at` to now.
 
@@ -56,11 +76,15 @@ async def create_tables(conn: aiosqlite.Connection) -> None:
             code TEXT NOT NULL UNIQUE,
             host_client_id TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            now_playing_track_id TEXT,
+            is_playing INTEGER NOT NULL DEFAULT 0,
+            playback_updated_at TIMESTAMP
         )
         """
     )
     await _ensure_last_active_at_column(conn)
+    await _ensure_playback_columns(conn)
     await conn.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_sessions_last_active_at

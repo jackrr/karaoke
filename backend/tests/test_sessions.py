@@ -81,6 +81,18 @@ async def test_get_session_shows_participants_including_host(async_client: Async
     ]
 
 
+async def test_get_session_playback_fields_default_null_and_false(
+    async_client: AsyncClient,
+) -> None:
+    created = await _create_session(async_client)
+
+    resp = await async_client.get(f"/sessions/{created['id']}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["now_playing_track_id"] is None
+    assert data["is_playing"] is False
+
+
 async def test_get_session_includes_joined_guest(async_client: AsyncClient) -> None:
     created = await _create_session(async_client)
     join_resp = await async_client.post(

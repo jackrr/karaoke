@@ -3,6 +3,7 @@ import logging
 import mimetypes
 import shutil
 import sqlite3
+import wave
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -34,6 +35,19 @@ _AUDIO_MEDIA_TYPES = {
 def _guess_audio_media_type(path_str: str) -> str:
     ext = Path(path_str).suffix.lower()
     return _AUDIO_MEDIA_TYPES.get(ext) or mimetypes.guess_type(path_str)[0] or "application/octet-stream"
+
+
+def _write_silent_wav(path: Path, duration_seconds: float = 1.0) -> None:
+    """Write a short, real (decodable) silent WAV file — used by the
+    SKIP_TRACK_DOWNLOAD test/CI seam so a real browser's <audio> element can
+    actually play the stub track, unlike an arbitrary placeholder byte
+    string which fails to decode and never fires 'play'/'pause' events."""
+    frame_rate = 8000
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(frame_rate)
+        wav_file.writeframes(b"\x00\x00" * int(frame_rate * duration_seconds))
 
 _TRACK_COLUMNS = (
     "tracks.id, tracks.session_id, tracks.source_url, tracks.youtube_video_id, "
@@ -286,7 +300,19 @@ async def remove_track(session_id: str, track_id: str, client_id: str) -> dict:
     if track is None or track["session_id"] != session_id:
         raise HTTPException(status_code=404, detail="Track not found")
 
+    async with db.execute(
+        "SELECT now_playing_track_id FROM sessions WHERE id = ?", (session_id,)
+    ) as cursor:
+        session_row = await cursor.fetchone()
+    was_now_playing = session_row is not None and session_row[0] == track_id
+
     await db.execute("DELETE FROM tracks WHERE id = ?", (track_id,))
+    if was_now_playing:
+        await db.execute(
+            "UPDATE sessions SET now_playing_track_id = NULL, is_playing = 0, "
+            "playback_updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (session_id,),
+        )
     await touch_session(db, session_id)
     await db.commit()
 
@@ -298,6 +324,10 @@ async def remove_track(session_id: str, track_id: str, client_id: str) -> dict:
     await manager.broadcast_event(
         session_id, "track_removed", {"track_id": track_id, "tracks": tracks}
     )
+    if was_now_playing:
+        await manager.broadcast_event(
+            session_id, "playback_state_changed", {"track_id": None, "is_playing": False}
+        )
     return {"tracks": tracks}
 
 
@@ -351,8 +381,8 @@ async def process_track_download(
             # so e2e tests can exercise queue behavior without network access
             # or heavy model inference.
             dest_dir.mkdir(parents=True, exist_ok=True)
-            audio_path = dest_dir / "audio.m4a"
-            await asyncio.to_thread(audio_path.write_bytes, b"fake audio")
+            audio_path = dest_dir / "audio.wav"
+            await asyncio.to_thread(_write_silent_wav, audio_path)
             await _update_track_or_abort(
                 db,
                 track_id,
