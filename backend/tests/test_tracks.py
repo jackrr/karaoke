@@ -328,6 +328,43 @@ async def test_stemming_failure_marks_error_and_cleans_up_dir(
     assert not dest_dir.exists()
 
 
+async def test_mix_uses_session_vocal_volume_fraction(
+    async_client: AsyncClient, monkeypatch
+) -> None:
+    """The mix step should use the session's own vocal_volume_fraction,
+    not the global settings default, when the session overrides it."""
+    monkeypatch.setattr(
+        tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=False)
+    )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
+
+    captured = {}
+
+    def _fake_mix(vocals_path, no_vocals_path, mixed_path, vocal_volume_fraction):
+        captured["vocal_volume_fraction"] = vocal_volume_fraction
+        mixed_path.write_bytes(b"fake mixed audio")
+
+    monkeypatch.setattr(tracks_module, "mix_with_attenuated_vocals", _fake_mix)
+
+    resp = await async_client.post(
+        "/sessions", json={"display_name": "Host", "vocal_volume_fraction": 0.66}
+    )
+    assert resp.status_code == 201
+    session = resp.json()
+    assert session["vocal_volume_fraction"] != tracks_module.settings.vocal_volume_fraction
+
+    resp = await async_client.post(
+        f"/sessions/{session['id']}/tracks",
+        json={"url": VALID_URL, "client_id": session["client_id"]},
+    )
+    assert resp.status_code == 202
+
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "ready"
+    assert captured["vocal_volume_fraction"] == 0.66
+
+
 async def test_get_tracks_for_nonexistent_session_returns_404(async_client: AsyncClient) -> None:
     resp = await async_client.get("/sessions/nonexistent/tracks")
     assert resp.status_code == 404

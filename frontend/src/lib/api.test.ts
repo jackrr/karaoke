@@ -10,6 +10,7 @@ import {
   reorderTracks,
   updatePlaybackState,
   requestPlayTrack,
+  updateSessionSettings,
   DuplicateTrackError,
 } from "./api";
 import { __resetIdentityForTests, getClientId } from "./identity";
@@ -50,6 +51,7 @@ describe("api helpers", () => {
             code: "123456",
             host_client_id: "host-1",
             client_id: "host-1",
+            vocal_volume_fraction: 0.2,
           }),
         ),
       };
@@ -63,12 +65,37 @@ describe("api helpers", () => {
         code: "123456",
         host_client_id: "host-1",
         client_id: "host-1",
+        vocal_volume_fraction: 0.2,
       });
       const [, init] = fetchMock.mock.calls[0];
       const body = JSON.parse(init.body);
       expect(body.display_name).toBe("Alice");
       expect(typeof body.client_id).toBe("string");
       expect(body.client_id.length).toBeGreaterThan(0);
+      expect(body.vocal_volume_fraction).toBeUndefined();
+    });
+
+    it("includes vocal_volume_fraction in the body when provided", async () => {
+      const res = {
+        ok: true,
+        json: vi.fn(() =>
+          Promise.resolve({
+            id: "abc",
+            code: "123456",
+            host_client_id: "host-1",
+            client_id: "host-1",
+            vocal_volume_fraction: 0.6,
+          }),
+        ),
+      };
+      const fetchMock = vi.fn(() => Promise.resolve(res)) as any;
+      vi.stubGlobal("fetch", fetchMock);
+
+      await createSession("Alice", 0.6);
+
+      const [, init] = fetchMock.mock.calls[0];
+      const body = JSON.parse(init.body);
+      expect(body.vocal_volume_fraction).toBe(0.6);
     });
 
     it("sends the browser's persisted client_id so an existing identity survives creating a session", async () => {
@@ -156,6 +183,7 @@ describe("api helpers", () => {
         ],
         now_playing_track_id: "t1",
         is_playing: true,
+        vocal_volume_fraction: 0.2,
       };
       vi.stubGlobal(
         "fetch",
@@ -363,6 +391,36 @@ describe("api helpers", () => {
         vi.fn(() => Promise.resolve({ ok: false, status: 400 })),
       );
       await expect(reorderTracks("abc", ["t1"])).rejects.toThrow();
+    });
+  });
+
+  describe("updateSessionSettings", () => {
+    it("puts client_id and vocal_volume_fraction, returns the updated value", async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ vocal_volume_fraction: 0.5 }),
+        }),
+      ) as any;
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await updateSessionSettings("abc", 0.5);
+
+      expect(result).toEqual({ vocal_volume_fraction: 0.5 });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/sessions/abc/settings");
+      expect(init.method).toBe("PUT");
+      const body = JSON.parse(init.body);
+      expect(body.vocal_volume_fraction).toBe(0.5);
+      expect(typeof body.client_id).toBe("string");
+    });
+
+    it("throws when the request fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve({ ok: false, status: 422 })),
+      );
+      await expect(updateSessionSettings("abc", 1.5)).rejects.toThrow();
     });
   });
 

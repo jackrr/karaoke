@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, removeTrack, updatePlaybackState, requestPlayTrack, type Track } from '$lib/api';
+  import { getSession, leaveSession, createSessionWebSocket, listTracks, submitYoutubeUrl, reorderTracks, removeTrack, updatePlaybackState, requestPlayTrack, updateSessionSettings, type Track } from '$lib/api';
   import { getDisplayName, getClientId } from '$lib/identity';
   import YoutubeDownloadForm from '$lib/components/YoutubeDownloadForm.svelte';
   import TrackPlayer from '$lib/components/TrackPlayer.svelte';
@@ -16,6 +16,7 @@
     online: number;
     host_client_id: string;
     participants: Participant[];
+    vocal_volume_fraction: number;
   };
 
   let session = $state<SessionData | null>(null);
@@ -107,6 +108,8 @@
             const requested = tracks.find((t) => t.id === typed.data.track_id);
             if (requested) handlePlay(requested);
           }
+        } else if (typed.type === 'session_settings_updated') {
+          if (session) session.vocal_volume_fraction = typed.data.vocal_volume_fraction;
         } else if (typed.type === 'session_ended') {
           // The server reaped this session (e.g. it sat idle past the TTL)
           // out from under us. Show a clear message instead of leaving the
@@ -185,6 +188,11 @@
     }
   }
 
+  async function handleUpdateVocalGain(value: number) {
+    await updateSessionSettings(sessionId, value);
+    if (session) session.vocal_volume_fraction = value;
+  }
+
   onDestroy(() => {
     ws?.close();
   });
@@ -221,6 +229,8 @@
     {isHost}
     {nowPlayingTrackId}
     {isPlaying}
+    vocalVolumeFraction={session.vocal_volume_fraction}
+    onUpdateVocalGain={handleUpdateVocalGain}
   />
 
   {#if nowPlaying}
