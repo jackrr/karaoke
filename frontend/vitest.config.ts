@@ -25,6 +25,7 @@ export default defineConfig({
           exclude: [...configDefaults.exclude, "**/*.test.{ts,js}"],
           environment: "jsdom",
           globals: true,
+          setupFiles: ["./src/test-setup.ts"],
         },
       },
       {
@@ -40,6 +41,7 @@ export default defineConfig({
           ],
           environment: "jsdom",
           globals: true,
+          setupFiles: ["./src/test-setup.ts"],
         },
       },
     ],

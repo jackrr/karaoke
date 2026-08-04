@@ -141,6 +141,7 @@ async def test_post_valid_url_downloads_successfully(async_client: AsyncClient, 
         tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=True)
     )
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics_none)
     session = await _create_session(async_client)
 
     resp = await async_client.post(
@@ -218,7 +219,7 @@ async def test_no_captions_reaches_ready_with_no_lyrics(
     assert track["lyrics_path"] is None
 
 
-async def test_no_captions_falls_back_to_lrclib(
+async def test_no_captions_uses_lrclib(
     async_client: AsyncClient, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -226,7 +227,7 @@ async def test_no_captions_falls_back_to_lrclib(
     )
     monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
 
-    canned_lrc = "[00:01.00]Fallback lyrics"
+    canned_lrc = "[00:01.00]Lrclib lyrics"
 
     async def _fake_fetch_synced_lyrics(**kwargs):
         return canned_lrc
@@ -245,6 +246,36 @@ async def test_no_captions_falls_back_to_lrclib(
     assert track["audio_path"].endswith("mixed.wav")
     assert track["lyrics_source"] == "lrclib"
     assert track["lyrics_path"]
+    assert Path(track["lyrics_path"]).read_text() == canned_lrc
+
+
+async def test_lrclib_preferred_over_captions_when_both_available(
+    async_client: AsyncClient, monkeypatch
+) -> None:
+    """lrclib.net is tried before bundled YouTube captions since captions
+    are frequently lower quality (auto-generated, no punctuation, etc)."""
+    monkeypatch.setattr(
+        tracks_module, "run_yt_dlp_sync", _fake_download_factory(with_captions=True)
+    )
+    monkeypatch.setattr(tracks_module, "run_demucs_sync", _fake_run_demucs_sync_factory())
+
+    canned_lrc = "[00:01.00]Lrclib lyrics"
+
+    async def _fake_fetch_synced_lyrics(**kwargs):
+        return canned_lrc
+
+    monkeypatch.setattr(tracks_module, "fetch_synced_lyrics", _fake_fetch_synced_lyrics)
+    session = await _create_session(async_client)
+
+    resp = await async_client.post(
+        f"/sessions/{session['id']}/tracks",
+        json={"url": VALID_URL, "client_id": session["client_id"]},
+    )
+    assert resp.status_code == 202
+
+    track = await _wait_for_status(async_client, session["id"], {"ready", "error"})
+    assert track["status"] == "ready"
+    assert track["lyrics_source"] == "lrclib"
     assert Path(track["lyrics_path"]).read_text() == canned_lrc
 
 

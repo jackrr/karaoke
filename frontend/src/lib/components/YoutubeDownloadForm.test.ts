@@ -11,6 +11,7 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
     source_url: "https://youtube.com/watch?v=xyz",
     youtube_video_id: "xyz",
     title: "A Song",
+    artist: "An Artist",
     status: "pending",
     error_message: null,
     audio_path: null,

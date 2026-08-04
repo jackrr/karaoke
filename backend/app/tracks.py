@@ -51,7 +51,7 @@ def _write_silent_wav(path: Path, duration_seconds: float = 1.0) -> None:
 
 _TRACK_COLUMNS = (
     "tracks.id, tracks.session_id, tracks.source_url, tracks.youtube_video_id, "
-    "tracks.title, tracks.status, tracks.error_message, tracks.audio_path, "
+    "tracks.title, tracks.artist, tracks.status, tracks.error_message, tracks.audio_path, "
     "tracks.lyrics_path, tracks.lyrics_source, tracks.duration_seconds, "
     "tracks.requested_by_client_id, tracks.position, tracks.created_at, "
     "tracks.updated_at, sm.display_name AS requested_by_display_name"
@@ -80,6 +80,7 @@ def _row_to_track(row: Any) -> dict:
         source_url,
         youtube_video_id,
         title,
+        artist,
         status,
         error_message,
         audio_path,
@@ -98,6 +99,7 @@ def _row_to_track(row: Any) -> dict:
         "source_url": source_url,
         "youtube_video_id": youtube_video_id,
         "title": title,
+        "artist": artist,
         "status": status,
         "error_message": error_message,
         "audio_path": audio_path,
@@ -389,6 +391,7 @@ async def process_track_download(
                 status="ready",
                 audio_path=str(audio_path),
                 title="Stub Track",
+                artist="Stub Artist",
                 duration_seconds=42.0,
                 lyrics_path=None,
                 lyrics_source="none",
@@ -410,34 +413,31 @@ async def process_track_download(
             result.vtt_path is not None,
         )
 
-        if result.vtt_path is not None:
-            await _update_track_or_abort(db, track_id, status="fetching_lyrics")
-            await _broadcast_current()
-            logger.info("track %s: converting bundled captions to lyrics", track_id)
+        await _update_track_or_abort(db, track_id, status="fetching_lyrics")
+        await _broadcast_current()
+        logger.info("track %s: looking up synced lyrics via lrclib", track_id)
+        lrc_content = await fetch_synced_lyrics(
+            title=result.title,
+            artist=result.artist,
+            album=result.album,
+            duration=result.duration_seconds,
+        )
+        if lrc_content:
+            lyrics_path = dest_dir / "lyrics.lrc"
+            await asyncio.to_thread(lyrics_path.write_text, lrc_content)
+            lyrics_source = "lrclib"
+            lyrics_path_str: str | None = str(lyrics_path)
+        elif result.vtt_path is not None:
+            logger.info("track %s: no lrclib match, converting bundled captions", track_id)
             vtt_content = await asyncio.to_thread(result.vtt_path.read_text)
             lrc_content = vtt_to_lrc(vtt_content)
             lyrics_path = dest_dir / "lyrics.lrc"
             await asyncio.to_thread(lyrics_path.write_text, lrc_content)
             lyrics_source = "captions"
-            lyrics_path_str: str | None = str(lyrics_path)
+            lyrics_path_str = str(lyrics_path)
         else:
-            await _update_track_or_abort(db, track_id, status="fetching_lyrics")
-            await _broadcast_current()
-            logger.info("track %s: no captions, looking up synced lyrics via lrclib", track_id)
-            lrc_content = await fetch_synced_lyrics(
-                title=result.title,
-                artist=result.artist,
-                album=result.album,
-                duration=result.duration_seconds,
-            )
-            if lrc_content:
-                lyrics_path = dest_dir / "lyrics.lrc"
-                await asyncio.to_thread(lyrics_path.write_text, lrc_content)
-                lyrics_source = "lrclib"
-                lyrics_path_str = str(lyrics_path)
-            else:
-                lyrics_source = "none"
-                lyrics_path_str = None
+            lyrics_source = "none"
+            lyrics_path_str = None
         logger.info("track %s: lyrics stage done (source=%s)", track_id, lyrics_source)
 
         await _update_track_or_abort(db, track_id, status="stemming")
@@ -477,6 +477,7 @@ async def process_track_download(
             status="ready",
             audio_path=str(mixed_path),
             title=result.title,
+            artist=result.artist,
             duration_seconds=result.duration_seconds,
             lyrics_path=lyrics_path_str,
             lyrics_source=lyrics_source,
