@@ -11,6 +11,7 @@ function makeTrack(overrides: Partial<Track> = {}): Track {
     source_url: "https://youtube.com/watch?v=xyz",
     youtube_video_id: "xyz",
     title: "A Song",
+    artist: "An Artist",
     status: "downloaded",
     error_message: null,
     audio_path: "/path/audio.m4a",
@@ -50,6 +51,53 @@ describe("TrackPlayer", () => {
 
     expect(getByRole("button", { name: "Play" })).toBeTruthy();
     expect(getByRole("button", { name: "Stop" })).toBeTruthy();
+  });
+
+  it("announces the title and artist on track change, then hides after a few seconds", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+    );
+    vi.useFakeTimers();
+
+    const { getByText, queryByText } = render(TrackPlayer, {
+      sessionId: "s1",
+      track: makeTrack({ title: "A Song", artist: "An Artist" }),
+      onStop: vi.fn(),
+    });
+
+    expect(getByText("A Song")).toBeTruthy();
+    expect(getByText("An Artist")).toBeTruthy();
+
+    await vi.advanceTimersByTimeAsync(4000);
+
+    expect(queryByText("A Song")).toBeNull();
+    expect(queryByText("An Artist")).toBeNull();
+
+    vi.useRealTimers();
+  });
+
+  it("re-announces on transition to a new track", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+    );
+
+    const trackA = makeTrack({ id: "t1", title: "Song A", artist: "Artist A" });
+    const trackB = makeTrack({ id: "t2", title: "Song B", artist: "Artist B" });
+
+    const { getByText, rerender } = render(TrackPlayer, {
+      sessionId: "s1",
+      track: trackA,
+      onStop: vi.fn(),
+    });
+
+    expect(getByText("Song A")).toBeTruthy();
+
+    await rerender({ sessionId: "s1", track: trackB, onStop: vi.fn() });
+
+    await waitFor(() => expect(getByText("Song B")).toBeTruthy());
+    expect(getByText("Artist B")).toBeTruthy();
   });
 
   it("calls updatePlaybackState with the track id when playback state changes", async () => {
@@ -97,7 +145,7 @@ describe("TrackPlayer", () => {
     await waitFor(() => expect(getByText(/no lyrics available/i)).toBeTruthy());
   });
 
-  it("renders only the current lyric line once lyrics resolve", async () => {
+  it("renders the current lyric line and previews the next once lyrics resolve", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
@@ -109,14 +157,14 @@ describe("TrackPlayer", () => {
       ),
     );
 
-    const { getByText, queryByText } = render(TrackPlayer, {
+    const { getByText } = render(TrackPlayer, {
       sessionId: "s1",
       track: makeTrack(),
       onStop: vi.fn(),
     });
 
     await waitFor(() => expect(getByText("Hello")).toBeTruthy());
-    expect(queryByText("World")).toBeNull();
+    expect(getByText("World")).toBeTruthy();
   });
 
   it("refetches and updates lyrics when the track changes, without showing stale content", async () => {

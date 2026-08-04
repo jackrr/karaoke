@@ -1,10 +1,10 @@
 """Pure, testable helper for fetching synced lyrics from lrclib.net.
 
 Deliberately has no FastAPI or DB imports — `tracks.py` wires this into the
-web app and background-task machinery, calling it as a fallback when
-yt-dlp doesn't provide timed captions. The seam for tests is
-`httpx2.AsyncClient`: tests monkeypatch it with a fake client/response, so
-no real network call is ever made.
+web app and background-task machinery, calling it as the primary lyrics
+source (YouTube's bundled captions are used only when lrclib has no match).
+The seam for tests is `httpx2.AsyncClient`: tests monkeypatch it with a
+fake client/response, so no real network call is ever made.
 """
 
 import httpx2

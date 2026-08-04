@@ -120,6 +120,7 @@ export type Track = {
   source_url: string;
   youtube_video_id: string;
   title: string | null;
+  artist: string | null;
   status: TrackStatus;
   error_message: string | null;
   audio_path: string | null;
