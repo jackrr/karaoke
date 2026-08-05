@@ -42,6 +42,10 @@ test.afterEach(async ({ page }) => {
 });
 
 test('drag-and-drop reorders the queue', async ({ page }) => {
+  // Extended beyond the default 30s: the tail end of this test waits
+  // through real (unsped-up) audio playback to capture a lyric transition.
+  test.setTimeout(60_000);
+
   // svelte-dnd-action focuses the dragged clone element while a drag is in
   // progress, and also auto-scrolls the drop zone's scroll container when
   // the cursor nears its edge (SCROLL_ZONE_PX). Either can shift page
@@ -187,5 +191,20 @@ test('drag-and-drop reorders the queue', async ({ page }) => {
   // Show the transition into the full-screen "now playing" view.
   await page.getByRole('button', { name: 'Play' }).first().click();
   await expect(page.locator('.playback-controls')).toBeVisible();
+
+  // The stub track (SKIP_TRACK_DOWNLOAD=1) carries scripted lyrics timed at
+  // 0.5s/3s/6s specifically so this recording can prove the lyric lines
+  // rotate smoothly in place rather than pushing/expanding vertically.
+  // Wait through two line changes so the rotation is visible twice.
+  await expect(page.locator('.line.current')).toHaveText('Testing one two three', {
+    timeout: 5000,
+  });
+  await expect(page.locator('.line.current')).toHaveText('A smooth lyric transition', {
+    timeout: 5000,
+  });
+  await page.waitForTimeout(1000);
+  await expect(page.locator('.line.current')).toHaveText('Rotating into view', {
+    timeout: 5000,
+  });
   await page.waitForTimeout(1000);
 });

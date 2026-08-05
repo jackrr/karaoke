@@ -3,6 +3,7 @@
   import YoutubeDownloadForm from './YoutubeDownloadForm.svelte';
   import QueueList from './QueueList.svelte';
   import SessionSettings from './SessionSettings.svelte';
+  import ThemeToggle from './ThemeToggle.svelte';
   import type { Track } from '../api';
 
   type ChatMessage = { sender: string; text: string; type?: string };
@@ -116,6 +117,9 @@
 
       <h3>Settings</h3>
       <SessionSettings {vocalVolumeFraction} onUpdate={onUpdateVocalGain} />
+
+      <h3>Theme</h3>
+      <ThemeToggle />
 
       <Chat {messages} onSend={onSendMessage} />
       <button class="btn btn-secondary leave-btn" type="button" onclick={onLeave}>

@@ -24,23 +24,21 @@
   color-scheme: dark;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --color-bg: #fafafa;
-    --color-surface: #fff;
-    --color-surface-muted: #f0f0f0;
-    --color-text: #1a1a1a;
-    --color-text-muted: #666;
-    --color-border: #e2e2e2;
-    --color-border-subtle: #eee;
-    --color-input-border: #ccc;
-    --color-error: #d32f2f;
-    --color-success: #16a34a;
-    --color-overlay: rgba(0, 0, 0, 0.4);
-    --color-overlay-surface: rgba(255, 255, 255, 0.9);
-    --color-shadow: rgba(0, 0, 0, 0.15);
-    color-scheme: light;
-  }
+:root[data-theme="light"] {
+  --color-bg: #fafafa;
+  --color-surface: #fff;
+  --color-surface-muted: #f0f0f0;
+  --color-text: #1a1a1a;
+  --color-text-muted: #666;
+  --color-border: #e2e2e2;
+  --color-border-subtle: #eee;
+  --color-input-border: #ccc;
+  --color-error: #d32f2f;
+  --color-success: #16a34a;
+  --color-overlay: rgba(0, 0, 0, 0.4);
+  --color-overlay-surface: rgba(255, 255, 255, 0.9);
+  --color-shadow: rgba(0, 0, 0, 0.15);
+  color-scheme: light;
 }
 
 html {
