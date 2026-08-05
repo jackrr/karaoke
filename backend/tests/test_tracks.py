@@ -191,9 +191,9 @@ async def test_skip_track_download_reaches_ready_without_real_download(
     assert track["status"] == "ready"
     assert track["audio_path"]
     assert track["title"] == "Stub Track"
-    assert track["duration_seconds"] == 42.0
-    assert track["lyrics_source"] == "none"
-    assert track["lyrics_path"] is None
+    assert track["duration_seconds"] == 8.0
+    assert track["lyrics_source"] == "stub"
+    assert track["lyrics_path"]
 
 
 async def test_no_captions_reaches_ready_with_no_lyrics(

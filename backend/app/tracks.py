@@ -37,6 +37,14 @@ def _guess_audio_media_type(path_str: str) -> str:
     return _AUDIO_MEDIA_TYPES.get(ext) or mimetypes.guess_type(path_str)[0] or "application/octet-stream"
 
 
+_STUB_DURATION_SECONDS = 8.0
+_STUB_LRC = (
+    "[00:00.50]Testing one two three\n"
+    "[00:03.00]A smooth lyric transition\n"
+    "[00:06.00]Rotating into view\n"
+)
+
+
 def _write_silent_wav(path: Path, duration_seconds: float = 1.0) -> None:
     """Write a short, real (decodable) silent WAV file — used by the
     SKIP_TRACK_DOWNLOAD test/CI seam so a real browser's <audio> element can
@@ -381,10 +389,14 @@ async def process_track_download(
             # Test/CI seam: skip real yt-dlp/demucs work entirely and settle
             # straight into a stable "ready" state with placeholder values,
             # so e2e tests can exercise queue behavior without network access
-            # or heavy model inference.
+            # or heavy model inference. The stub audio is long enough, and
+            # carries synced lyrics, so e2e video/screenshot tests can also
+            # demo the lyric-line transition without a real download.
             dest_dir.mkdir(parents=True, exist_ok=True)
             audio_path = dest_dir / "audio.wav"
-            await asyncio.to_thread(_write_silent_wav, audio_path)
+            await asyncio.to_thread(_write_silent_wav, audio_path, _STUB_DURATION_SECONDS)
+            lyrics_path = dest_dir / "lyrics.lrc"
+            await asyncio.to_thread(lyrics_path.write_text, _STUB_LRC)
             await _update_track_or_abort(
                 db,
                 track_id,
@@ -392,9 +404,9 @@ async def process_track_download(
                 audio_path=str(audio_path),
                 title="Stub Track",
                 artist="Stub Artist",
-                duration_seconds=42.0,
-                lyrics_path=None,
-                lyrics_source="none",
+                duration_seconds=_STUB_DURATION_SECONDS,
+                lyrics_path=str(lyrics_path),
+                lyrics_source="stub",
             )
             await _broadcast_current()
             logger.info("track %s: skip_track_download set, stubbed to ready", track_id)
