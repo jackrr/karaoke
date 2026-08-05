@@ -134,6 +134,7 @@
     position: fixed;
     top: 0;
     bottom: 0;
+    left: auto;
     right: calc(-1 * var(--panel-width));
     margin: 0;
     height: 100%;

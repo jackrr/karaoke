@@ -7,7 +7,8 @@
   import SessionCard from '$lib/components/SessionCard.svelte';
   import SessionMenu from '$lib/components/SessionMenu.svelte';
   import { goto } from '$app/navigation';
-  import { onMount, onDestroy } from 'svelte';
+  import { getContext, onMount, onDestroy } from 'svelte';
+  import { SESSION_MENU_TRIGGER_KEY, type SessionMenuTrigger } from '$lib/sessionMenuTrigger';
 
   type Participant = { client_id: string; display_name: string; is_host: boolean };
   type SessionData = {
@@ -39,6 +40,7 @@
   let sessionId = '';
   const displayName = getDisplayName();
   let sessionMenu: { open: () => void; close: () => void } | undefined = $state();
+  const menuTrigger = getContext<SessionMenuTrigger>(SESSION_MENU_TRIGGER_KEY);
 
   async function refreshSession() {
     const data = await getSession(sessionId);
@@ -57,6 +59,7 @@
     isPlaying = data.is_playing;
     loading = false;
     tracks = await listTracks(sessionId);
+    menuTrigger.open = () => sessionMenu?.open();
 
     ws = createSessionWebSocket(sessionId, {
       onOpen: () => {
@@ -206,6 +209,7 @@
 
   onDestroy(() => {
     ws?.close();
+    menuTrigger.open = null;
   });
 
   async function handleLeave() {
@@ -222,10 +226,6 @@
 </script>
 
 {#if session}
-  <button class="menu-trigger" type="button" onclick={() => sessionMenu?.open()} aria-label="Open menu">
-    ☰
-  </button>
-
   <SessionMenu
     bind:this={sessionMenu}
     {messages}
@@ -293,19 +293,5 @@
 
   .loading {
     margin: 1rem;
-  }
-
-  .menu-trigger {
-    position: fixed;
-    top: 4.25rem;
-    right: 1rem;
-    z-index: 700;
-    min-width: 44px;
-    min-height: 44px;
-    border: 1px solid #e2e2e2;
-    border-radius: 8px;
-    background: #fff;
-    font-size: 1.1rem;
-    cursor: pointer;
   }
 </style>

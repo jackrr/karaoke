@@ -24,3 +24,27 @@ if (typeof Element !== "undefined" && !Element.prototype.animate) {
     return animation as unknown as globalThis.Animation;
   };
 }
+
+// jsdom doesn't implement ResizeObserver, used by components that measure
+// overflow (e.g. the queue's marquee-scrolling track titles). Fire the
+// callback once on a microtask after observe(), like a real resize
+// notification after initial layout, so tests can stub element dimensions
+// between render and the observer's first callback.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class {
+    #callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.#callback = callback;
+    }
+    observe(target: Element) {
+      queueMicrotask(() =>
+        this.#callback(
+          [{ target } as ResizeObserverEntry],
+          this as unknown as ResizeObserver,
+        ),
+      );
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
