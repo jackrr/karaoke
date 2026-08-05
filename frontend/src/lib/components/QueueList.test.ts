@@ -461,4 +461,55 @@ describe("QueueList", () => {
       .map((el) => el.textContent);
     expect(titles).toEqual(["Song One", "Song Three"]);
   });
+
+  it("marks a title as overflowing (for the scrolling animation) only when it's wider than its row", async () => {
+    const longTitle = makeTrack({
+      id: "t1",
+      title: "A Very Long Song Title That Overflows The Row",
+    });
+    const shortTitle = makeTrack({ id: "t2", title: "Short" });
+
+    const { container } = render(QueueList, {
+      tracks: [longTitle, shortTitle],
+      participants: [],
+      onReorder: vi.fn(),
+      onPlay: vi.fn(),
+      onRemove: vi.fn(),
+    });
+
+    const titleEls = Array.from(
+      container.querySelectorAll(".title"),
+    ) as HTMLElement[];
+    expect(titleEls).toHaveLength(2);
+
+    // jsdom doesn't lay out real pixel widths, so stub scrollWidth/clientWidth
+    // to simulate one title overflowing its row and one fitting, then let the
+    // stubbed ResizeObserver's queued callback (see test-setup.ts) re-run the
+    // component's overflow check against these values.
+    Object.defineProperty(titleEls[0], "scrollWidth", {
+      value: 400,
+      configurable: true,
+    });
+    Object.defineProperty(titleEls[0], "clientWidth", {
+      value: 150,
+      configurable: true,
+    });
+    Object.defineProperty(titleEls[1], "scrollWidth", {
+      value: 60,
+      configurable: true,
+    });
+    Object.defineProperty(titleEls[1], "clientWidth", {
+      value: 150,
+      configurable: true,
+    });
+
+    await waitFor(() => {
+      expect(titleEls[0].classList.contains("is-overflowing")).toBe(true);
+      expect(titleEls[1].classList.contains("is-overflowing")).toBe(false);
+    });
+
+    expect(titleEls[0].style.getPropertyValue("--marquee-shift")).toBe(
+      "-250px",
+    );
+  });
 });

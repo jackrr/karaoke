@@ -88,6 +88,26 @@
     }
   }
 
+  // Long titles are clipped by `.title`'s `overflow: hidden`; when the text
+  // is wider than its box, slide it back and forth via `--marquee-shift`
+  // instead of letting it push the row (and the sidebar) wider.
+  function marquee(node: HTMLElement) {
+    function update() {
+      const overflow = node.scrollWidth - node.clientWidth;
+      if (overflow > 2) {
+        node.style.setProperty('--marquee-shift', `-${overflow}px`);
+        node.classList.add('is-overflowing');
+      } else {
+        node.classList.remove('is-overflowing');
+        node.style.removeProperty('--marquee-shift');
+      }
+    }
+    update();
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(node);
+    return { destroy: () => resizeObserver.disconnect() };
+  }
+
   async function handleRemove(track: Track) {
     const previousItems = items;
     const newItems = items.filter((t) => t.id !== track.id);
@@ -124,7 +144,7 @@
     >
       {#each items as track (track.id)}
         <li class="track">
-          <span class="title">{track.title ?? track.source_url ?? track.youtube_video_id}</span>
+          <span class="title" use:marquee><span class="title-text">{track.title ?? track.source_url ?? track.youtube_video_id}</span></span>
           <span class="status status-{track.status}">
             {STATUS_LABELS[track.status] ?? track.status}
           </span>
@@ -171,25 +191,63 @@
     list-style: none;
     margin: 0;
     padding: 0;
+    min-width: 0;
   }
 
   .track {
     display: flex;
     align-items: baseline;
+    flex-wrap: wrap;
     gap: 0.5rem;
     padding: 0.4rem 0;
     border-bottom: 1px solid #eee;
     cursor: grab;
+    min-width: 0;
+  }
+
+  .title {
+    flex: 1 1 auto;
+    min-width: 3rem;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .title-text {
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .title:global(.is-overflowing) .title-text {
+      animation: marquee 6s ease-in-out infinite;
+    }
+  }
+
+  @keyframes marquee {
+    0%,
+    15% {
+      transform: translateX(0);
+    }
+    45%,
+    65% {
+      transform: translateX(var(--marquee-shift, 0));
+    }
+    95%,
+    100% {
+      transform: translateX(0);
+    }
   }
 
   .uploader {
     font-size: 0.8rem;
     color: #666;
+    flex-shrink: 0;
   }
 
   .status {
     font-size: 0.85rem;
     color: #666;
+    flex-shrink: 0;
   }
 
   .status-error {
@@ -208,20 +266,24 @@
     font-size: 0.8rem;
     font-weight: 600;
     color: #1a1a1a;
+    flex-shrink: 0;
   }
 
   .error-message {
     font-size: 0.8rem;
     color: #d32f2f;
+    flex-shrink: 0;
   }
 
   .btn-play {
     padding: 0.2rem 0.75rem;
     font-size: 0.85rem;
+    flex-shrink: 0;
   }
 
   .btn-remove {
     padding: 0.2rem 0.75rem;
     font-size: 0.85rem;
+    flex-shrink: 0;
   }
 </style>
