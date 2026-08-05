@@ -36,7 +36,7 @@
   }
 
   :global(.session-layout a) {
-    color: #333;
+    color: var(--color-text);
     text-decoration: none;
   }
 
@@ -44,9 +44,9 @@
     margin-left: auto;
     min-width: 44px;
     min-height: 44px;
-    border: 1px solid #e2e2e2;
+    border: 1px solid var(--color-border);
     border-radius: 8px;
-    background: #fff;
+    background: var(--color-surface);
     font-size: 1.1rem;
     cursor: pointer;
   }

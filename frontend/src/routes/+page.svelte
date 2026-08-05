@@ -1,5 +1,4 @@
 <script lang="ts">
-  import '../app.css';
   import { createSession, listSessions } from '$lib/api';
   import { getDisplayName, setDisplayName } from '$lib/identity';
   import { onMount } from 'svelte';
@@ -102,7 +101,7 @@
   }
 
   .subtitle {
-    color: #666;
+    color: var(--color-text-muted);
     margin-top: 0.5rem;
   }
 
@@ -117,8 +116,8 @@
   }
 
   .btn-primary {
-    background: #4a90d9;
-    color: #fff;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
   }
 
   .btn:hover {
@@ -126,13 +125,13 @@
   }
 
   .error {
-    color: #d32f2f;
+    color: var(--color-error);
     margin: 1rem;
   }
 
   .session-count {
     text-align: center;
-    color: #666;
+    color: var(--color-text-muted);
     margin: 1rem;
   }
 
@@ -145,7 +144,7 @@
 
   .display-name-input {
     padding: 0.6rem 0.75rem;
-    border: 1px solid #ccc;
+    border: 1px solid var(--color-input-border);
     border-radius: 6px;
     font-size: 1rem;
   }
@@ -156,7 +155,7 @@
   }
 
   .join-link a {
-    color: #4a90d9;
+    color: var(--color-accent);
   }
 
   .advanced {

@@ -106,7 +106,7 @@
     inset: 0;
     z-index: 500;
     display: flex;
-    background: #fafafa;
+    background: var(--color-bg);
   }
 
   .track-announcement {
@@ -118,8 +118,8 @@
     text-align: center;
     padding: 0.75rem 1.5rem;
     border-radius: 0.75rem;
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    background: var(--color-overlay-surface);
+    box-shadow: 0 2px 12px var(--color-shadow);
   }
 
   .announcement-title {
@@ -131,7 +131,7 @@
   .announcement-artist {
     margin: 0.15rem 0 0;
     font-size: 0.9rem;
-    color: #666;
+    color: var(--color-text-muted);
   }
 
   .lyrics-area {
@@ -144,7 +144,7 @@
   }
 
   .no-lyrics {
-    color: #666;
+    color: var(--color-text-muted);
     margin: 0;
   }
 </style>

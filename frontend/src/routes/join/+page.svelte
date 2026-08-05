@@ -1,5 +1,4 @@
 <script lang="ts">
-  import '../../app.css';
   import { joinSession } from '$lib/api';
   import { getDisplayName, setDisplayName } from '$lib/identity';
   import { formatCode } from '$lib/utils/string';
@@ -84,7 +83,7 @@
   }
 
   .subtitle {
-    color: #666;
+    color: var(--color-text-muted);
     margin-top: 0.5rem;
   }
 
@@ -99,7 +98,7 @@
   .code-input,
   .display-name-input {
     padding: 0.6rem 0.75rem;
-    border: 1px solid #ccc;
+    border: 1px solid var(--color-input-border);
     border-radius: 6px;
     font-size: 1rem;
   }
@@ -107,7 +106,7 @@
   .code-preview {
     text-align: center;
     font-family: ui-monospace, monospace;
-    color: #666;
+    color: var(--color-text-muted);
     margin: 0;
   }
 
@@ -121,12 +120,12 @@
   }
 
   .btn-primary {
-    background: #4a90d9;
-    color: #fff;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
   }
 
   .error {
-    color: #d32f2f;
+    color: var(--color-error);
     margin: 1rem;
     text-align: center;
   }
@@ -137,7 +136,7 @@
   }
 
   .back-link a {
-    color: #333;
+    color: var(--color-text);
     text-decoration: none;
   }
 </style>

@@ -78,8 +78,8 @@
   }
 
   .btn-primary {
-    background: #4a90d9;
-    color: #fff;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
   }
 
   .btn:disabled {
@@ -88,7 +88,7 @@
   }
 
   .error {
-    color: #d32f2f;
+    color: var(--color-error);
     margin: 0.5rem 0 0;
   }
 </style>

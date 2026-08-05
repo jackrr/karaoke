@@ -179,12 +179,12 @@
   }
 
   .error {
-    color: #d32f2f;
+    color: var(--color-error);
     margin: 0 0 0.5rem;
   }
 
   .empty {
-    color: #666;
+    color: var(--color-text-muted);
   }
 
   .tracks {
@@ -200,7 +200,7 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     padding: 0.4rem 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color-border-subtle);
     cursor: grab;
     min-width: 0;
   }
@@ -240,38 +240,38 @@
 
   .uploader {
     font-size: 0.8rem;
-    color: #666;
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
 
   .status {
     font-size: 0.85rem;
-    color: #666;
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
 
   .status-error {
-    color: #d32f2f;
+    color: var(--color-error);
   }
 
   .status-downloaded {
-    color: #16a34a;
+    color: var(--color-success);
   }
 
   .status-ready {
-    color: #16a34a;
+    color: var(--color-success);
   }
 
   .now-playing {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--color-text);
     flex-shrink: 0;
   }
 
   .error-message {
     font-size: 0.8rem;
-    color: #d32f2f;
+    color: var(--color-error);
     flex-shrink: 0;
   }
 
