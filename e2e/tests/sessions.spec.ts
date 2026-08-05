@@ -19,8 +19,10 @@ test('homepage shows an active session count, not a list of sessions', async ({ 
   await page.waitForLoadState('networkidle');
   await expect(page.getByText(/active session/)).toBeVisible();
   // The homepage must never enumerate individual sessions — the only button
-  // present should be "Create Session", not a per-session join button.
-  await expect(page.getByRole('button')).toHaveCount(1);
+  // in the page content should be "Create Session", not a per-session join
+  // button. Scoped to `main` since the global header now always renders its
+  // own menu button.
+  await expect(page.locator('main').getByRole('button')).toHaveCount(1);
 });
 
 test('session page shows the session code, connected status, and chat input', async ({
