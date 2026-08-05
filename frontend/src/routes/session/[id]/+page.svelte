@@ -6,7 +6,10 @@
   import QueueList from '$lib/components/QueueList.svelte';
   import SessionCard from '$lib/components/SessionCard.svelte';
   import SessionMenu from '$lib/components/SessionMenu.svelte';
+  import JoinQrBadge from '$lib/components/JoinQrBadge.svelte';
+  import { buildJoinUrl } from '$lib/utils/string';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { getContext, onMount, onDestroy } from 'svelte';
   import { SESSION_MENU_TRIGGER_KEY, type SessionMenuTrigger } from '$lib/sessionMenuTrigger';
 
@@ -30,6 +33,7 @@
   let nowPlayingTrackId = $state<string | null>(null);
   let isPlaying = $state(false);
   let isHost = $derived(session?.host_client_id === getClientId());
+  let joinUrl = $derived(session ? buildJoinUrl(page.url.origin, session.code) : '');
   // Bumped every time `tracks` is replaced wholesale (queue_reordered
   // broadcasts, our own optimistic reorder). Svelte 5's `$state` wraps
   // assigned arrays in a new proxy on every write, so comparing an old array
@@ -243,6 +247,10 @@
     vocalVolumeFraction={session.vocal_volume_fraction}
     onUpdateVocalGain={handleUpdateVocalGain}
   />
+
+  {#if isHost}
+    <JoinQrBadge {joinUrl} code={session.code} />
+  {/if}
 
   {#if nowPlaying}
     {#key nowPlaying.id}
