@@ -3,11 +3,18 @@
   import { getDisplayName, setDisplayName } from '$lib/identity';
   import { formatCode } from '$lib/utils/string';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
+  import { onMount } from 'svelte';
 
   let code = $state('');
   let displayName = $state(getDisplayName());
   let loading = $state(false);
   let error = $state<string | null>(null);
+
+  onMount(() => {
+    const prefill = page.url.searchParams.get('code');
+    if (prefill) code = prefill.replace(/\D/g, '').slice(0, 6);
+  });
 
   function handleCodeInput(e: Event) {
     // Strip anything pasted or typed that isn't a digit (spaces, dashes,

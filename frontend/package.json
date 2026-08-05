@@ -17,6 +17,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig tsconfig.json && prettier --check ."
   },
   "dependencies": {
+    "qrcode-generator": "^2.0.4",
     "svelte-dnd-action": "^0.9.74"
   },
   "devDependencies": {
