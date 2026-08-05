@@ -188,6 +188,17 @@
     }
   }
 
+  function handleTrackEnded() {
+    if (!nowPlaying) return;
+    const idx = tracks.findIndex((t) => t.id === nowPlaying!.id);
+    const next = idx === -1 ? undefined : tracks[idx + 1];
+    if (next) {
+      handlePlay(next);
+    } else {
+      nowPlaying = null;
+    }
+  }
+
   async function handleUpdateVocalGain(value: number) {
     await updateSessionSettings(sessionId, value);
     if (session) session.vocal_volume_fraction = value;
@@ -235,7 +246,12 @@
 
   {#if nowPlaying}
     {#key nowPlaying.id}
-      <TrackPlayer {sessionId} track={nowPlaying} onStop={() => (nowPlaying = null)} />
+      <TrackPlayer
+        {sessionId}
+        track={nowPlaying}
+        onStop={() => (nowPlaying = null)}
+        onEnded={handleTrackEnded}
+      />
     {/key}
   {:else}
     {#if sessionEnded}

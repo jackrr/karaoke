@@ -235,6 +235,9 @@ export async function requestPlayTrack(sessionId: string, trackId: string) {
 
 // ---- WebSocket helpers ----
 
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 10000;
+
 export function createSessionWebSocket(
   sessionId: string,
   opts?: {
@@ -245,31 +248,76 @@ export function createSessionWebSocket(
 ) {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const clientId = getClientId();
-  const ws = new WebSocket(
-    `${protocol}//${location.host}/ws/${sessionId}?client_id=${encodeURIComponent(clientId)}`,
-  );
-  let connected = false;
+  const url = `${protocol}//${location.host}/ws/${sessionId}?client_id=${encodeURIComponent(clientId)}`;
 
-  ws.onopen = () => {
-    connected = true;
-    opts?.onOpen?.();
-  };
+  let ws: WebSocket;
+  let closedByCaller = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectDelay = RECONNECT_BASE_DELAY_MS;
 
-  ws.onclose = () => {
-    connected = false;
-    opts?.onClose?.();
-  };
+  function scheduleReconnect() {
+    if (closedByCaller || reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY_MS);
+  }
 
-  ws.onmessage = (event) => {
-    if (!connected) return;
-    try {
-      const msg = JSON.parse(event.data);
-      opts?.onMessage?.(msg);
-    } catch {
-      // plain-text broadcast — treat as a "message" event
-      opts?.onMessage?.({ type: "message", data: event.data });
+  function connect() {
+    // Each socket's handlers check `socket === ws` before acting, so a
+    // superseded socket (e.g. one still CLOSING when visibilitychange forces
+    // a fresh connect) can't fire a spurious onClose or schedule a
+    // duplicate reconnect once it's no longer the current connection.
+    const socket = new WebSocket(url);
+    ws = socket;
+
+    socket.onopen = () => {
+      if (socket !== ws) return;
+      reconnectDelay = RECONNECT_BASE_DELAY_MS;
+      opts?.onOpen?.();
+    };
+
+    socket.onclose = () => {
+      if (socket !== ws) return;
+      opts?.onClose?.();
+      scheduleReconnect();
+    };
+
+    socket.onmessage = (event) => {
+      if (socket !== ws || socket.readyState !== WebSocket.OPEN) return;
+      try {
+        const msg = JSON.parse(event.data);
+        opts?.onMessage?.(msg);
+      } catch {
+        // plain-text broadcast — treat as a "message" event
+        opts?.onMessage?.({ type: "message", data: event.data });
+      }
+    };
+  }
+
+  connect();
+
+  // A backgrounded tab's socket can die silently (mobile OSes especially)
+  // without ever firing onclose until the tab is foregrounded again — check
+  // and reconnect immediately on regaining visibility rather than waiting
+  // out the backoff timer.
+  function handleVisibilityChange() {
+    if (
+      !closedByCaller &&
+      document.visibilityState === "visible" &&
+      ws.readyState !== WebSocket.OPEN &&
+      ws.readyState !== WebSocket.CONNECTING &&
+      ws.readyState !== WebSocket.CLOSING
+    ) {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      connect();
     }
-  };
+  }
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 
   return {
     send: (type: string, data: unknown) => {
@@ -278,7 +326,12 @@ export function createSessionWebSocket(
     get connected() {
       return ws.readyState === WebSocket.OPEN;
     },
-    close: () => ws.close(),
+    close: () => {
+      closedByCaller = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      ws.close();
+    },
     get readyState() {
       return ws.readyState;
     },

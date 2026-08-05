@@ -66,10 +66,9 @@ test('host playback state syncs to a guest, and a guest can request playback on 
   await expect(guestNowPlaying.locator('.now-playing')).toHaveAttribute('aria-label', 'Now playing');
   await expect(guestPage.locator('.playback-controls')).toHaveCount(0);
 
-  // Actually start local playback on the host (the play/pause toggle inside
-  // the full-screen player), then pause it — the guest's badge should
-  // reflect the paused state via the playback_state_changed broadcast.
-  await hostPage.getByRole('button', { name: 'Play' }).click();
+  // Opening the full-screen player autoplays it immediately, so it's already
+  // playing here — pause it and confirm the guest's badge reflects the
+  // paused state via the playback_state_changed broadcast.
   await hostPage.getByRole('button', { name: 'Pause' }).click();
   await expect(guestNowPlaying.locator('.now-playing')).toHaveAttribute('aria-label', 'Now paused', {
     timeout: 5000,

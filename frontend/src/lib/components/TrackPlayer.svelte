@@ -11,8 +11,12 @@
   import PlaybackControls from './PlaybackControls.svelte';
   import { fly, fade } from 'svelte/transition';
 
-  let { sessionId, track, onStop }: { sessionId: string; track: Track; onStop: () => void } =
-    $props();
+  let {
+    sessionId,
+    track,
+    onStop,
+    onEnded,
+  }: { sessionId: string; track: Track; onStop: () => void; onEnded?: () => void } = $props();
 
   function handlePlayStateChange(isPlaying: boolean) {
     updatePlaybackState(sessionId, track.id, isPlaying).catch(() => {
@@ -67,6 +71,7 @@
     bind:currentTime
     src={getTrackAudioUrl(sessionId, track.id)}
     style="display:none"
+    onended={onEnded}
   ></audio>
 
   {#if showAnnouncement}
