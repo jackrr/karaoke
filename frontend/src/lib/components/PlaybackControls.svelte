@@ -127,8 +127,8 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
-    background: #fff;
-    border-top: 1px solid #e2e2e2;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
   }
 
   .play-pause {
@@ -136,8 +136,8 @@
     min-height: 44px;
     border: none;
     border-radius: 50%;
-    background: #1a1a1a;
-    color: #fff;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
     font-size: 1.1rem;
     cursor: pointer;
   }
@@ -146,7 +146,7 @@
     min-width: 2.75rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
-    color: #555;
+    color: var(--color-text-muted);
     font-size: 0.85rem;
   }
 

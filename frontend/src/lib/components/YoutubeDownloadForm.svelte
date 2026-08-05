@@ -80,7 +80,7 @@
   }
 
   .error {
-    color: #d32f2f;
+    color: var(--color-error);
     margin: 0.5rem 0 0;
   }
 </style>

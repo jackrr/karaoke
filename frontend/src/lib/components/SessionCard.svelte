@@ -23,8 +23,8 @@
 
 <style>
   .session-card {
-    background: #fff;
-    border: 1px solid #e2e2e2;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1rem;
@@ -41,7 +41,7 @@
 
   .badge {
     display: inline-block;
-    color: #555;
+    color: var(--color-text-muted);
     font-size: 0.85rem;
   }
 
@@ -55,7 +55,7 @@
   }
 
   .participants li {
-    background: #f0f0f0;
+    background: var(--color-surface-muted);
     border-radius: 999px;
     padding: 0.2rem 0.6rem;
     font-size: 0.85rem;

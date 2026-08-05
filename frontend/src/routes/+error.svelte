@@ -21,7 +21,7 @@
   }
 
   .error a {
-    color: #1a1a1a;
+    color: var(--color-text);
     text-decoration: underline;
   }
 </style>

@@ -142,7 +142,9 @@
     width: var(--panel-width);
     border: none;
     padding: 1.5rem;
-    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: -4px 0 16px var(--color-shadow);
     transition: right 0.25s ease;
   }
 
@@ -151,7 +153,7 @@
   }
 
   .session-menu::backdrop {
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--color-overlay);
   }
 
   .close-btn {

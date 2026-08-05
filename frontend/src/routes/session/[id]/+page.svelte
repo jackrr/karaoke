@@ -283,13 +283,13 @@
 
 <style>
   .session-ended {
-    color: #d32f2f;
+    color: var(--color-error);
     font-weight: 600;
     margin-bottom: 1rem;
   }
 
-  .connected { color: #16a34a; }
-  .status:not(.connected) { color: #d32f2f; }
+  .connected { color: var(--color-success); }
+  .status:not(.connected) { color: var(--color-error); }
 
   .loading {
     margin: 1rem;

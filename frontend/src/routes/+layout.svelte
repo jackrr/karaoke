@@ -1,11 +1,15 @@
+<script>
+  import '../app.css';
+</script>
+
 <style>
   .navbar {
     display: flex;
     align-items: center;
     gap: 1rem;
     padding: 1rem 2rem;
-    background: #fff;
-    border-bottom: 1px solid #e2e2e2;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
   }
 
   .navbar > a:hover {
