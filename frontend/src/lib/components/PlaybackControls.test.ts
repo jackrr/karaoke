@@ -43,12 +43,12 @@ describe("PlaybackControls", () => {
       onStop: vi.fn(),
     });
 
-    const button = getByRole("button", { name: "Play" });
-    await fireEvent.click(button);
-    expect(audio.play).toHaveBeenCalled();
-
+    // Mounting autoplays, so the button starts as "Pause".
     await fireEvent.click(getByRole("button", { name: "Pause" }));
     expect(audio.pause).toHaveBeenCalled();
+
+    await fireEvent.click(getByRole("button", { name: "Play" }));
+    expect(audio.play).toHaveBeenCalled();
   });
 
   it("formats elapsed and total time as mm:ss", async () => {
@@ -110,8 +110,11 @@ describe("PlaybackControls", () => {
       onPlayStateChange,
     });
 
-    // Not called just from mounting/initial sync.
-    expect(onPlayStateChange).not.toHaveBeenCalled();
+    // Mounting autoplays, so onPlayStateChange fires with true right away.
+    expect(onPlayStateChange).toHaveBeenLastCalledWith(true);
+
+    await fireEvent.click(getByRole("button", { name: "Pause" }));
+    expect(onPlayStateChange).toHaveBeenLastCalledWith(false);
 
     await fireEvent.click(getByRole("button", { name: "Play" }));
     expect(onPlayStateChange).toHaveBeenLastCalledWith(true);

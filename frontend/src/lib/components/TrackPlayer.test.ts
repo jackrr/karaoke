@@ -130,6 +130,26 @@ describe("TrackPlayer", () => {
     );
   });
 
+  it("calls onEnded when the track finishes playing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false, status: 404 })),
+    );
+    const onEnded = vi.fn();
+
+    const { container } = render(TrackPlayer, {
+      sessionId: "s1",
+      track: makeTrack({ id: "t1" }),
+      onStop: vi.fn(),
+      onEnded,
+    });
+
+    const audio = container.querySelector("audio")!;
+    audio.dispatchEvent(new Event("ended"));
+
+    expect(onEnded).toHaveBeenCalled();
+  });
+
   it("shows a message when lyrics are unavailable", async () => {
     vi.stubGlobal(
       "fetch",

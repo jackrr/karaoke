@@ -12,6 +12,10 @@
   let playing = $state(false);
   let currentTime = $state(0);
   let duration = $state(0);
+  // Autoplay must fire exactly once per new audio element — this effect can
+  // re-run for unrelated reactive reasons, and re-calling play() on every
+  // re-run would override a pause the user just triggered.
+  let autoplayedEl: HTMLAudioElement | undefined;
 
   $effect(() => {
     const el = audio;
@@ -39,6 +43,13 @@
     syncPlaying();
     syncTime();
     syncDuration();
+    if (autoplayedEl !== el) {
+      autoplayedEl = el;
+      // Autoplay can be blocked outside a user-gesture window (and jsdom's
+      // HTMLMediaElement.play() doesn't return a promise at all) — the host
+      // can still hit the play button manually if it's rejected/unsupported.
+      el.play()?.catch(() => {});
+    }
 
     return () => {
       el.removeEventListener('play', notifyPlaying);

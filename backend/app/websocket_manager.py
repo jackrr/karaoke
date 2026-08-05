@@ -94,6 +94,29 @@ async def _is_active_member(session_id: str, client_id: str) -> bool:
     return row is not None
 
 
+async def _reactivate_member(session_id: str, client_id: str) -> bool:
+    """Allow a client_id that previously joined this session to (re)connect,
+    even if a dropped socket earlier marked it "left" — that's exactly the
+    reconnect case (lost network, backgrounded tab, page refresh), not a new
+    join. Returns False only if this client_id never joined the session at
+    all, which still gets rejected."""
+    db = await get_db()
+    async with db.execute(
+        "SELECT left_at FROM session_members WHERE session_id = ? AND client_id = ?",
+        (session_id, client_id),
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        return False
+    if row[0] is not None:
+        await db.execute(
+            "UPDATE session_members SET left_at = NULL WHERE session_id = ? AND client_id = ?",
+            (session_id, client_id),
+        )
+        await db.commit()
+    return True
+
+
 async def _mark_member_left(session_id: str, client_id: str) -> None:
     """Mirror `leave_session`'s DB update so a dropped websocket (tab closed,
     network loss) doesn't leave a member showing as active forever. Guarded
@@ -112,7 +135,7 @@ async def _mark_member_left(session_id: str, client_id: str) -> None:
 async def websocket_endpoint(
     websocket: WebSocket, session_id: str, client_id: str = Query(...)
 ) -> None:
-    if not await _is_active_member(session_id, client_id):
+    if not await _reactivate_member(session_id, client_id):
         # Reject before accepting — this closes the handshake with a policy
         # violation rather than opening then immediately dropping.
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
