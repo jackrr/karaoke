@@ -45,7 +45,7 @@
   .qr-code {
     display: block;
     background: #fff;
-    border: 1px solid #e2e2e2;
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 0.5rem;
     box-sizing: content-box;
